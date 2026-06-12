@@ -27,6 +27,7 @@ import momoi.mod.qqpro.lib.vertical
 import momoi.mod.qqpro.lib.width
 import momoi.mod.qqpro.ota.OTAManager2
 import momoi.mod.qqpro.util.Utils
+import byd.cxkcxkckx.watchdog.TestFragment
 
 private val ACCENT = 0xFF_4FC3F7.toInt()
 
@@ -38,6 +39,8 @@ private val ACCENT = 0xFF_4FC3F7.toInt()
  * left-to-right swipe dismisses it (for watches without a back button).
  */
 class AboutFragment : MyDialogFragment() {
+    // Counter for taps on the version name
+    private var versionTapCount: Int = 0
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -76,6 +79,16 @@ class AboutFragment : MyDialogFragment() {
                 .textColor(0xFF_BBBBBB)
                 .gravity(Gravity.CENTER)
                 .padding(bottom = 12.dp)
+                .clickable {
+                    // Increment tap counter
+                    versionTapCount++
+                    if (versionTapCount >= 5) {
+                        versionTapCount = 0
+                        val fragment = TestFragment()
+                        // Show the test dialog
+                        fragment.show(childFragmentManager, "testFragment")
+                    }
+                }
 
             add<TextView>()
                 .text("NWear QQ · 爅峫\nQQ Pro · java30433\nQQ Max · AILIFE")
@@ -96,6 +109,12 @@ class AboutFragment : MyDialogFragment() {
             addView(root, FILL, FILL)
             onSwipeBack = { dismiss() }
         }
+    }
+
+    // Ensure the dialog fills the screen for consistent appearance on all resolutions
+    override fun onStart() {
+        super.onStart()
+        dialog?.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     private fun momoi.mod.qqpro.lib.LinearScope.button(

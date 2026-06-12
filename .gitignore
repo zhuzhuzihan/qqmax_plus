@@ -17,3 +17,4 @@ local.properties
 app/dist/mixin.apk
 app/dist/output-metadata.json
 app/decompiled/
+.clinerules
