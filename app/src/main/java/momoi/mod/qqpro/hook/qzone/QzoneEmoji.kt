@@ -22,6 +22,33 @@ object QzoneEmoji {
 
     private val map: Map<String, String> by lazy { load() }
 
+    /**
+     * EMCodes the watch can actually draw inline via its native EmoMatcher — exactly the union of
+     * `QzoneEmoticonConstants.f28936a` (classic 小黄脸, e100–e303…) and `f28939d` (the 400xxx emoji
+     * faces that map to bundled `emoji_NNN` drawables). EmoMatcher builds its lookup map from these
+     * two arrays, so any `[em]eNNN[/em]` NOT listed here renders as the ugly default placeholder box
+     * forever (e.g. e10351, which face_config marks `AniStickerType:1` — an animated lottie sticker
+     * with no inline form). Collected by reflection so obfuscated field names don't matter.
+     */
+    private val supportedFaceCodes: Set<String> by lazy { loadSupportedFaceCodes() }
+
+    private fun loadSupportedFaceCodes(): Set<String> {
+        val set = HashSet<String>()
+        runCatching {
+            val cls = Class.forName("com.tencent.watch.qzone_impl.ui.textlayout.QzoneEmoticonConstants")
+            for (f in cls.declaredFields) {
+                if (f.type == Array<String>::class.java) {
+                    f.isAccessible = true
+                    (f.get(null) as? Array<*>)?.forEach { item ->
+                        (item as? String)?.let { s -> RE.find(s)?.groupValues?.get(1)?.let { set.add(it) } }
+                    }
+                }
+            }
+        }.onFailure { Utils.log("QzoneEmoji loadSupportedFaceCodes: $it") }
+        Utils.log("QzoneEmoji: ${set.size} watch-supported face codes")
+        return set
+    }
+
     private fun load(): Map<String, String> {
         val m = HashMap<String, String>()
         // Primary: our bundled, interpolation-extended map (EMCode → Unicode char), generated from the
@@ -54,10 +81,11 @@ object QzoneEmoji {
     /**
      * Replace `[em]e<EMCode>[/em]`:
      *  - known emoji code → its Unicode character (the watch font draws it);
-     *  - unknown emoji-range code (≥ 400000, not in this build's config — newer than the bundled
-     *    9.2.80 face_config, QQ downloads these at runtime) → removed, so it doesn't reach the native
-     *    EmoMatcher's ugly placeholder box;
-     *  - classic 小黄脸 codes (< 400000) → left untouched for StringUtil.a to render as image faces.
+     *  - code the watch's EmoMatcher can draw inline ([supportedFaceCodes]) → left untouched so
+     *    StringUtil.a renders it as an image face;
+     *  - anything else (animated-sticker codes like e10351, runtime-downloaded faces newer than this
+     *    build's config, etc.) → a readable `[e<code>]` text marker, instead of EmoMatcher's opaque
+     *    default placeholder box that can never load.
      */
     fun substitute(text: CharSequence?): CharSequence {
         if (text.isNullOrEmpty()) return text ?: ""
@@ -65,12 +93,7 @@ object QzoneEmoji {
         if (!s.contains("[em]")) return text
         return RE.replace(s) { mr ->
             val code = mr.groupValues[1]
-            map[code] ?: run {
-                val n = code.toIntOrNull()
-                // Unknown emoji-range code → visible marker (so coverage is easy to eyeball);
-                // classic 小黄脸 codes (< 400000) → leave for StringUtil.a image faces.
-                if (n != null && n >= 400000) "[?$code]" else mr.value
-            }
+            map[code] ?: if (supportedFaceCodes.contains(code)) mr.value else "[e$code]"
         }
     }
 

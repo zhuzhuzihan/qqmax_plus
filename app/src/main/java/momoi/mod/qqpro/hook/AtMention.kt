@@ -78,6 +78,26 @@ private fun uidToUin(uid: String): String? = try {
     null
 }
 
+/**
+ * Open the profile card for a bare [uin] — used by the QZone header (we only know the uin there).
+ * Resolves the uid from the local contact cache when possible (friends); strangers open with the
+ * uin only, which is enough for [com.tencent.qqnt.watch.profile.ui.ProfileCardFragment] to open
+ * (it only crashes on an EMPTY uin via its `Long.parseLong`). The card re-fetches the rest by uid.
+ */
+fun View.openProfileByUin(uin: Long) {
+    if (uin <= 0L) return
+    val view = this
+    // Resolve uid (local cache → server) FIRST: ProfileCardFragment fetches name/avatar BY UID, so
+    // opening with an empty uid (the common stranger case) shows only the bare QQ number. Server
+    // resolution runs async on a binder thread → re-post to the UI thread to navigate.
+    ProfileDetailCard.resolveUid(uin) { uid ->
+        view.post {
+            Utils.log("openProfileByUin uin=$uin uid=${uid?.ifEmpty { null } ?: "(none)"}")
+            view.navigateToProfile(ProfileData("0-0", -1, uin.toString(), uid.orEmpty(), "", false))
+        }
+    }
+}
+
 /** Navigate to `profileCardFragment` with [profileData] via the obfuscated NavController. */
 private fun View.navigateToProfile(profileData: ProfileData) {
     try {

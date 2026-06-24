@@ -221,6 +221,14 @@ object ProfileDetailCard {
         }.onFailure { Utils.log("ProfileDetailCard.fetchByUin error: $it"); cb(null) }
     }
 
+    /** Resolve uin → uid: local cache first (instant, friends), else the kernel server (works for
+     *  strangers). [cb] may run on a binder thread, so UI callers should re-post to the main thread. */
+    fun resolveUid(uin: Long, cb: (String?) -> Unit) {
+        val local = uidByUin(uin)
+        if (!local.isNullOrEmpty()) { cb(local); return }
+        resolveUidServer(uin, cb)
+    }
+
     /** Resolve uin → uid via the kernel UixConvert service (a server call that works for any uin,
      *  including strangers not in the local cache). [cb] runs on a binder thread. */
     private fun resolveUidServer(uin: Long, cb: (String?) -> Unit) {

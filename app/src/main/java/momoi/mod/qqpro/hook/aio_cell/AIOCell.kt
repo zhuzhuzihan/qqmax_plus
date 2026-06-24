@@ -206,6 +206,18 @@ object AIOCell {
             p6: LifecycleOwner?
         ) {
             super.i(view, item, p3, p4, p5, p6)
+            // Diagnostic for the orange "请在手机QQ查看" placeholder (WatchToQQViewMsgItem): dump what the
+            // message actually carries, so we can tell whether the content is present client-side (some
+            // typed element non-null → potentially renderable with a new cell hook) or the watch only
+            // received a server-side stub (no usable element → not recoverable on the watch).
+            if (item is WatchToQQViewMsgItem) runCatching {
+                val r = item.d
+                val els = runCatching { r.elements }.getOrNull().orEmpty()
+                Utils.log("UnsupportedMsg msgType=${r.msgType} subType=${r.subMsgType} elementCount=${els.size} content='${item.o}'")
+                els.forEachIndexed { i, e ->
+                    Utils.log("  UnsupportedMsg el[$i] elementType=${runCatching { e.elementType }.getOrNull()} present=[${elementPresence(e)}]")
+                }
+            }.onFailure { Utils.log("UnsupportedMsg dump failed: $it") }
             // Grey-tip cells (WatchGrayTipsCell) have a bare TextView as their root view —
             // not an AIOCellGroupWidget — and the native cell sets no movement method, so
             // the member-name spans built into tipsContent (see GrayTipMention.kt) are
@@ -394,3 +406,13 @@ object AIOCell {
     }
 
 }
+
+/** Names of the non-null typed sub-elements on a [com.tencent.qqnt.kernel.nativeinterface.MsgElement]
+ *  (e.g. "textElement,arkElement"), via reflection — used by the unsupported-message diagnostic to
+ *  reveal which content a "view on phone QQ" message still carries. Empty → no usable element. */
+private fun elementPresence(e: Any): String = runCatching {
+    e.javaClass.fields
+        .filter { it.name.endsWith("Element") }
+        .mapNotNull { f -> runCatching { if (f.get(e) != null) f.name else null }.getOrNull() }
+        .joinToString(",")
+}.getOrDefault("?")

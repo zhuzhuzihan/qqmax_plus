@@ -3,6 +3,12 @@ package momoi.mod.qqpro.hook.qzone
 import android.content.Context
 import android.graphics.Outline
 import android.graphics.Typeface
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.TextPaint
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +31,7 @@ import loadPicUrl
 import momoi.mod.qqpro.hook.view.InlineVideoView
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.hook.QZoneMiniApp
+import momoi.mod.qqpro.hook.openProfileByUin
 import momoi.mod.qqpro.hook.openUserQzone
 import momoi.mod.qqpro.lib.dp
 import momoi.mod.qqpro.lib.material.M3
@@ -32,6 +39,7 @@ import momoi.mod.qqpro.lib.material.MaterialSymbols
 import momoi.mod.qqpro.lib.material.leadingSymbol
 import momoi.mod.qqpro.lib.material.symbolImage
 import momoi.mod.qqpro.util.Utils
+import momoi.mod.qqpro.util.linkColorResolved
 import java.util.WeakHashMap
 
 /**
@@ -148,6 +156,17 @@ object QzoneFeedCard {
             background = M3.rounded(M3.surfaceContainer, M3.radiusLg)
             setPadding(16.dp, 20.dp, 16.dp, 18.dp)
         }
+        // Tap the header → open this user's profile card.
+        runCatching {
+            val uin = user?.uin ?: 0L
+            if (uin > 0L) {
+                card.isClickable = true
+                card.setOnClickListener { v ->
+                    runCatching { v.openProfileByUin(uin) }
+                        .onFailure { Utils.log("QzoneHeader openProfile uin=$uin: $it") }
+                }
+            }
+        }
         val avatar = circleAvatar(ctx, 72)
         card.addView(avatar, LinearLayout.LayoutParams(72.dp, 72.dp))
         runCatching {
@@ -235,17 +254,34 @@ object QzoneFeedCard {
             card.addView(bodyTv, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = 8.dp })
         }
 
-        // --- forwarded original quote ---
+        // --- forwarded original quote: "@原作者：内容" on one line, like the phone ---
         runCatching {
             val orig = data.originalInfo
-            val on = runCatching { orig?.user?.nickName }.getOrNull()
-            if (on != null) card.addView(TextView(ctx).apply {
-                setText("@$on")
-                setTextColor(M3.onSurfaceVariant); textSize = 11f
-                background = M3.rounded(M3.surfaceContainerHigh, M3.radiusMd)
-                setPadding(8.dp, 6.dp, 8.dp, 6.dp)
-            }, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = 6.dp })
-        }
+            if (orig != null) {
+                val quote = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = M3.rounded(M3.surfaceContainerHigh, M3.radiusMd)
+                    setPadding(8.dp, 6.dp, 8.dp, 6.dp)
+                }
+                // Match the main body's size so EmoMatcher draws faces at the same scale (it sizes
+                // sysface ImageSpans to the TextView's lineHeight).
+                val origTv = TextView(ctx).apply {
+                    setTextColor(M3.onSurface); textSize = 13f
+                    setLineSpacing(2.dp.toFloat(), 1f)
+                }
+                val origIsMiniApp = runCatching { QZoneMiniApp.bindText(origTv, orig) }.getOrDefault(false)
+                // The "@原作者：" prefix is folded into the single parsed SpannableString (see parsedBody)
+                // so EmoMatcher's async face loader keeps updating the live text view.
+                val body = if (origIsMiniApp) origTv.text
+                           else parsedBody(orig, origTv, quoteAuthor = runCatching { orig.user }.getOrNull())
+                if (!body.isNullOrBlank()) {
+                    origTv.text = body
+                    quote.addView(origTv, LinearLayout.LayoutParams(MATCH, WRAP))
+                }
+                if (quote.childCount > 0)
+                    card.addView(quote, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = 6.dp })
+            }
+        }.onFailure { Utils.log("QzoneFeedCard quote: $it") }
 
         // --- media grid ---
         val media = QzoneActions.mediaItems(data)
@@ -299,22 +335,55 @@ object QzoneFeedCard {
         return col
     }
 
-    /** Parsed summary (resolves QQ `[em]` faces + @mentions); falls back to raw text. */
-    private fun parsedBody(data: BusinessFeedData, tv: TextView): CharSequence? {
+    /**
+     * Parsed summary (resolves QQ `[em]` faces + @mentions); falls back to raw text.
+     *
+     * When [quoteAuthor] is non-null (a forwarded/quoted block) a tappable, link-coloured
+     * `@原作者：` prefix is folded into the SAME parsed [SpannableString]. This matters: EmoMatcher's
+     * async face loader mutates that exact string and invalidates the view passed to [StringUtil.a],
+     * so the prefix MUST live in the same object we set as `tv.text` — wrapping the result in a fresh
+     * SpannableStringBuilder orphans it and freezes faces on the placeholder box.
+     */
+    private fun parsedBody(data: BusinessFeedData, tv: TextView, quoteAuthor: User? = null): CharSequence? {
         val cs = runCatching { data.cellSummaryV2 }.getOrNull() ?: return null
         val summary = cs.summary?.takeIf { it.isNotEmpty() } ?: return null
-        Utils.log("QzoneBody raw=$summary")
+        Utils.log("QzoneBody raw=$summary quote=${quoteAuthor != null}")
         // getParsedSummary(nick, view) PREPENDS nick to the body and CACHES the result against that
         // view (stale after our card rebuilds → emoji placeholder). Parse fresh via StringUtil.a against
-        // the live view. Only prepend the author name in the native niche case (summary starts with "：").
+        // the live view.
         val nick = runCatching { data.user?.nickName }.getOrNull()
-        val prefix = if (!nick.isNullOrEmpty() && !summary.startsWith(":") && summary.startsWith("：")) nick else ""
+        // Quote mode: "@原作者" + separator. The forwarded original's summary already starts with "：",
+        // so only inject a separator when it doesn't. The native niche prefix (bare nick) applies only
+        // outside quote mode.
+        val quoteNick = quoteAuthor?.nickName
+        val atRun = if (quoteAuthor != null && !quoteNick.isNullOrBlank()) "@$quoteNick" else ""
+        val prefix = when {
+            atRun.isNotEmpty() -> atRun + (if (summary.startsWith("：") || summary.startsWith(":")) "" else "：")
+            !nick.isNullOrEmpty() && !summary.startsWith(":") && summary.startsWith("：") -> nick
+            else -> ""
+        }
         // Swap Unicode-emoji [em] codes for their chars first, then let StringUtil.a do @mentions +
-        // classic image sysfaces.
+        // classic image sysfaces. The prefix carries no [em], so substitution never shifts offset 0.
         val full = QzoneEmoji.substitute(prefix + summary)
-        val rendered = runCatching { StringUtil.a(full, tv) }.getOrNull() ?: full
+        val rendered = runCatching { StringUtil.a(full, tv) }.getOrNull() ?: SpannableString(full)
         // Re-attach the uin StringUtil.a discards, so @mentions open the mentioned user's QZone.
-        return runCatching { QzoneMentions.linkify(full, rendered, tv) }.getOrNull() ?: rendered
+        val linked = runCatching { QzoneMentions.linkify(full, rendered, tv) }.getOrNull() ?: rendered
+        // Colour + link the "@原作者" run (separator excluded) on the SAME spannable.
+        if (atRun.isNotEmpty() && linked is Spannable) runCatching {
+            val uin = quoteAuthor?.uin ?: 0L
+            if (uin > 0L) {
+                linked.setSpan(object : ClickableSpan() {
+                    override fun onClick(w: View) {
+                        runCatching { openUserQzone(w, uin) }.onFailure { Utils.log("QzoneFeedCard quote @: $it") }
+                    }
+                    override fun updateDrawState(ds: TextPaint) { ds.color = linkColorResolved(); ds.isUnderlineText = false }
+                }, 0, atRun.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                tv.movementMethod = LinkMovementMethod.getInstance()
+            } else {
+                linked.setSpan(ForegroundColorSpan(linkColorResolved()), 0, atRun.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        return linked
     }
 
     /** Dump candidate forward/repost fields so we can discover whether reposter data is available. */
