@@ -15,6 +15,7 @@ import com.tencent.watch.aio_impl.coreImpl.vb.WatchAIOListVB
 import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.MsgUtil
+import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.asGroup
 import momoi.mod.qqpro.drawable.roundCornerDrawable
@@ -113,10 +114,16 @@ class 跳转第一条未读消息 : WatchAIOListVB() {
             if (recent.unreadCntCached > 0) {
                 val tv = add<TextView>()
                     .layoutGravity(Gravity.RIGHT or Gravity.TOP)
+                    // Left corners rounded, right square so it sits flush to the screen edge (the right
+                    // semicircle is "hidden" by simply not rounding it) — no right margin needed.
                     .background(roundCornerDrawable(M3.surfaceContainerHigh, 9999f, 0f, 9999f, 0f))
                     .padding(6.dp)
                     .textSize(12f)
                     .textColor(M3.primary)
+                // Only fix needed: clear the rich titlebar (which overlays the list from the very top
+                // in chat-only mode) / screen top — it was flush against it.
+                (tv.layoutParams as? FrameLayout.LayoutParams)?.topMargin =
+                    (if (Settings.enableTitlebar.value) Settings.titlebarHeight.value.toInt() + 12 else 10).dp
                 SkipAction(this@跳转第一条未读消息.H, tv, recent)
             }
         }
