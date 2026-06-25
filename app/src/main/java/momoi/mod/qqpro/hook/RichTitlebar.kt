@@ -17,11 +17,11 @@ import com.tencent.qqnt.msg.KernelServiceUtil
 import com.tencent.qqnt.watch.ui.componet.tablayout.CircleIndicator
 import com.tencent.watch.aio_impl.ui.WatchAIOFragment
 import java.util.concurrent.atomic.AtomicBoolean
-import momoi.mod.qqpro.QQNT
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.drawable.roundCornerDrawable
 import momoi.mod.qqpro.enums.ChatType
 import momoi.mod.qqpro.findAll
+import momoi.mod.qqpro.hook.action.GroupMemberCache
 import momoi.mod.qqpro.hook.action.RecentContacts
 import momoi.mod.qqpro.renderQQFaces
 import momoi.mod.qqpro.lib.FILL
@@ -153,8 +153,10 @@ object RichTitlebar {
 
             if (isGroup) {
                 runCatching {
-                    QQNT.Group.getMemberList(peerId.toLong()) { res ->
-                        countTv.post { countTv.text = " (${res.infos.size})"; relayoutTitle() }
+                    // Cached list lands immediately so the count shows at once; the server fetch only
+                    // updates it when the member count actually changed.
+                    GroupMemberCache.load(peerId.toLong()) { members ->
+                        countTv.post { countTv.text = " (${members.size})"; relayoutTitle() }
                     }
                 }.onFailure { Utils.log("RichTitlebar member fetch failed: $it") }
             }

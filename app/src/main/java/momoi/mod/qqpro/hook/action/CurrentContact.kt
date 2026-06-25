@@ -10,7 +10,6 @@ import com.tencent.qqnt.kernel.nativeinterface.Contact
 import com.tencent.qqnt.kernel.nativeinterface.MemberInfo
 import com.tencent.qqnt.msg.KernelServiceUtil
 import momoi.anno.mixin.Mixin
-import momoi.mod.qqpro.QQNT
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.enums.ChatType
 import momoi.mod.qqpro.util.Utils
@@ -116,8 +115,12 @@ class Hook(p0: IAIOFactory) : ChatPie(p0) {
                 // Bulk member list for @mention / picker only (no levels). It WILL overwrite the
                 // kernel per-member cache with level=1 stubs, but CurrentMemberInfo now filters
                 // those out (keeps the max level ever seen, persisted), so it no longer matters.
-                QQNT.Group.getMemberList(CurrentContact.peerUid.toLong()) { listResult ->
-                    CurrentGroupMembers.info = listResult.infos
+                //
+                // Served from GroupMemberCache: on re-entry the cached list lands SYNCHRONOUSLY here
+                // so @mention linkify works immediately; the background server fetch only re-fires
+                // this block when the member count changed.
+                GroupMemberCache.load(CurrentContact.peerUid.toLong()) { members ->
+                    CurrentGroupMembers.info = members
                     CurrentGroupMembers.callbacks.forEach { it() }
                     CurrentGroupMembers.callbacks.clear()
                     // Re-linkify cells that were bound before the member list arrived.
