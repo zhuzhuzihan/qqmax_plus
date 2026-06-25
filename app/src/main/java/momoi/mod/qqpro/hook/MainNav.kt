@@ -569,29 +569,42 @@ object MainNav {
     private fun positionBar(
         parent: ViewGroup, pagerView: View, indicator: View, nav: LinearLayout, barHeight: Int,
     ) {
-        // Position + reveal BEFORE the first draw (not via post): a post() leaves the INVISIBLE bar
-        // unplaced for one painted frame, which shows as a black band flashing before the bar appears.
+        // Position + reveal BEFORE each draw (not via post): a post() leaves the INVISIBLE bar
+        // unplaced for one painted frame, which shows as a band flashing before the bar appears.
         // OnPreDraw runs after layout but before that draw, so the bar is placed and visible on the
         // very first painted frame of the returned page.
+        //
+        // The listener is PERSISTENT (not one-shot) and re-runs whenever parent.height or
+        // pagerView.top changes: on a cold start those settle over several frames (window insets /
+        // round-screen chin), and a one-shot listener would lock in an intermediate value — leaving a
+        // black band at the top because pagerView.translationY was computed against a stale top=0. It
+        // is cheap when stable (a single equality check) and stops firing once this nav is removed.
+        var lastH = -1
+        var lastTop = Int.MIN_VALUE
         nav.viewTreeObserver.addOnPreDrawListener(
             object : android.view.ViewTreeObserver.OnPreDrawListener {
                 override fun onPreDraw(): Boolean {
-                    if (parent.height <= 0) return true   // not measured yet; retry next frame
-                    nav.viewTreeObserver.removeOnPreDrawListener(this)
+                    val h = parent.height
+                    val top = pagerView.top
+                    if (h <= 0) return true                     // not measured yet; retry next frame
+                    if (h == lastH && top == lastTop) return true   // already positioned for this size
+                    lastH = h; lastTop = top
                     runCatching {
-                        pagerView.layoutParams =
-                            pagerView.layoutParams.apply { height = parent.height - barHeight }
-                        pagerView.requestLayout()
+                        if (pagerView.layoutParams.height != h - barHeight) {
+                            pagerView.layoutParams =
+                                pagerView.layoutParams.apply { height = h - barHeight }
+                            pagerView.requestLayout()
+                        }
                         if (Settings.bottomMainNav.value) {
                             // Bar at the bottom; content flush to the top.
-                            nav.translationY = (parent.height - barHeight).toFloat()
-                            pagerView.translationY = -pagerView.top.toFloat()
+                            nav.translationY = (h - barHeight).toFloat()
+                            pagerView.translationY = -top.toFloat()
                         } else {
                             // Bar at the top; push content down below it.
                             nav.translationY = 0f
-                            pagerView.translationY = (barHeight - pagerView.top).toFloat()
+                            pagerView.translationY = (barHeight - top).toFloat()
                         }
-                        // Final y is set; reveal now so the bar never flashes at its pre-positioned spot.
+                        // Position is set; reveal now so the bar never flashes at a pre-positioned spot.
                         nav.visibility = View.VISIBLE
                     }.onFailure {
                         // Never leave the bar stuck invisible if positioning threw.
