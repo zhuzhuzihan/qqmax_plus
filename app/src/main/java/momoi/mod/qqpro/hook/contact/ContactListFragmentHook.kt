@@ -103,14 +103,23 @@ class ContactListFragmentHook : ContactListFragment() {
         momoi.mod.qqpro.hook.MainNav.contactGroupUnread = groupCount
         momoi.mod.qqpro.hook.MainNav.refresh()
 
+        Utils.log("ContactListFragmentHook rebuild: friends=${friends.size} groups=${groups.size}")
         val out = ArrayList<ContactBaseItem>(friends.size + groups.size + 5)
-        if (!Settings.materialContactsList.value) {
+        val material = Settings.materialContactsList.value
+        if (!material) {
             // Action rows live in the top bar when Material mode is on; restore them inline when off.
             out.add(AddFriendItem())
             out.add(FriendNotifyItem(friendCount))
             out.add(GroupNotifyItem(groupCount))
         }
-        if (friends.isNotEmpty()) {
+        // Stable item-0 anchor — fixes "contacts list starts scrolled to the groups section". The VM
+        // emits state incrementally (groups can land before friends), and when the friends section
+        // later prepends above an already-rendered groups section, LinearLayoutManager preserves the
+        // groups view as the anchor, leaving the list scrolled past the friends. Stock never hits this
+        // because its item 0 (加好友) is always present; in Material mode the action rows moved to the
+        // top bar, so we keep the 好友 header permanently as the first item to anchor the list at top.
+        // (No scrollToPosition — the anchor keeps it pinned; see the single-observer path in onCreate.)
+        if (friends.isNotEmpty() || material) {
             out.add(SectionHeaderItem("好友"))
             out.addAll(friends)
         }
