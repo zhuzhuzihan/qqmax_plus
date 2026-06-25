@@ -1,6 +1,5 @@
 package momoi.mod.qqpro.hook.sticker
 
-import android.graphics.drawable.Drawable
 import com.tencent.mobileqq.emoticonview.EmoticonInfo
 import com.tencent.mobileqq.emoticonview.IPicEmoticonInfo
 import com.tencent.mobileqq.qroute.QRoute
@@ -10,11 +9,8 @@ import com.tencent.qqnt.kernel.nativeinterface.Contact
 import com.tencent.qqnt.kernel.nativeinterface.CustomEmotionData
 import com.tencent.qqnt.kernel.nativeinterface.IFetchMarketEmoticonListCallback
 import com.tencent.qqnt.kernel.nativeinterface.IGProFetchFavEmojiListCallback
-import com.tencent.qqnt.kernel.nativeinterface.IGetMarketEmoticonPathCallback
 import com.tencent.qqnt.kernel.nativeinterface.IOperateCallback
-import com.tencent.qqnt.kernel.nativeinterface.MarketEmojiPathServiceType
 import com.tencent.qqnt.kernel.nativeinterface.MarketEmoticonInfo
-import com.tencent.qqnt.kernel.nativeinterface.MarketEmoticonPath
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement
 import com.tencent.qqnt.msg.KernelServiceUtil
 import com.tencent.qqnt.watch.emotion.util.EmosmUtils
@@ -171,42 +167,6 @@ object StickerStore {
                     kotlin.Unit
                 })
             }.onFailure { Utils.log("StickerStore.thumbFile err: $it"); post(onFile, aioPng(s)) }
-        }.start()
-    }
-
-    /**
-     * Resolve a renderable thumbnail Drawable for [s] — the SAME path the chat cell uses, so it
-     * downloads on demand and caches: build a MarkFaceMessage (EmosmUtils.a) → the local emoticon
-     * service's `syncGetEmoticonInfo` → IPicEmoticonInfo → `i("fromAIO")` returns a URLDrawable that
-     * fetches the image from the server when drawn. [onDrawable] runs on the UI thread (null = none).
-     *
-     * (getMarketEmoticonPath alone only returns a path and does NOT download, which is why the empty
-     * cells stayed empty until a sticker was actually sent and rendered in the chat.)
-     */
-    fun thumbDrawable(s: Sticker, onDrawable: (Drawable?) -> Unit) {
-        val jsonPath = jsonPaths[s.epId]
-        Thread {
-            runCatching {
-                if (jsonPath == null) { post(onDrawable, null); return@Thread }
-                val mfm = EmosmUtils.a.a(s.epId, s.eId, jsonPath)
-                // For DISPLAY the encrypt key isn't needed (the image URL comes from epId+sbufID), but
-                // EmosmUtils.a leaves the key/param byte arrays null — the render path reads their
-                // length and NPEs. Default the nullable byte[] fields to empty so it can render.
-                if (mfm != null) {
-                    if (mfm.h == null) mfm.h = ByteArray(0)   // sbfKey
-                    if (mfm.l == null) mfm.l = ByteArray(0)   // mobileParam
-                    if (mfm.m == null) mfm.m = ByteArray(0)
-                }
-                val app = mqq.app.MobileQQ.getMobileQQ().peekAppRuntime()
-                val ems = app?.getRuntimeService(IEmoticonManagerService::class.java, "")
-                val info = if (mfm != null) ems?.syncGetEmoticonInfo<EmoticonInfo>(mfm) as? IPicEmoticonInfo else null
-                val d = info?.i("fromAIO", true)
-                // The URLDrawable doesn't fetch until it's drawn; force the download now so the cell
-                // paints even before/without a draw pass (status: LOADING→FILE_DOWNLOADED).
-                runCatching { d?.downloadImediatly() }
-                Utils.log("StickerStore.thumbDrawable epId=${s.epId} eId=${s.eId} mfm=${mfm != null} info=${info != null} drawable=${d != null} status=${runCatching { d?.status }.getOrNull()}")
-                post(onDrawable, d as Drawable?)
-            }.onFailure { Utils.log("StickerStore.thumbDrawable err: $it"); post(onDrawable, null) }
         }.start()
     }
 
