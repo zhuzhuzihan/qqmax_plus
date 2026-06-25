@@ -10,10 +10,13 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -649,6 +652,127 @@ class 设置页 : SettingsActivity() {
     }
 
     /**
+     * A small numeric-input popup for a slider value: tap the value chip to type an exact number
+     * (clamped to [min]..[max]) instead of scrubbing the seek bar. Styled like [showOptionPicker].
+     */
+    private fun showNumberInput(
+        title: String,
+        current: Float,
+        min: Float,
+        max: Float,
+        onValue: (Float) -> Unit,
+    ) {
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+
+        val panel = LinearLayout(this)
+            .vertical()
+            .padding(20.dp)
+        panel.background(GradientDrawable().apply {
+            setColor(M3.surfaceContainerHigh)
+            cornerRadius = 22.dp.toFloat()
+        })
+
+        lateinit var edit: EditText
+        val confirm = {
+            val v = edit.text?.toString()?.trim()?.toFloatOrNull()
+            if (v == null) {
+                Utils.toast(this@设置页, "请输入有效数字")
+            } else {
+                onValue(v.coerceIn(min, max))
+                dialog.dismiss()
+            }
+        }
+        panel.content {
+            add<TextView>()
+                .text(title)
+                .textSize(15f)
+                .textColor(M3.onSurface)
+                .gravity(Gravity.CENTER)
+                .padding(bottom = 4.dp)
+            add<TextView>()
+                .text("范围 ${format(min)} ~ ${format(max)}")
+                .textSize(11f)
+                .textColor(M3.onSurfaceVariant)
+                .gravity(Gravity.CENTER)
+                .padding(bottom = 14.dp)
+
+            edit = add<EditText>().width(FILL)
+            edit.apply {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+                isSingleLine = true
+                // Pressing the keyboard's done/enter confirms — so the value commits even when the
+                // soft keyboard covers the buttons on the short watch screen.
+                imeOptions = EditorInfo.IME_ACTION_DONE
+                setOnEditorActionListener { _, _, _ -> confirm(); true }
+                setText(format(current))
+                setSelection(text.length)
+                textSize = 18f
+                setTextColor(ACCENT)
+                gravity = Gravity.CENTER
+                background = GradientDrawable().apply {
+                    setColor(M3.surfaceContainer)
+                    cornerRadius = 12.dp.toFloat()
+                }
+                setPadding(12.dp, 12.dp, 12.dp, 12.dp)
+            }
+
+            add<LinearLayout>()
+                .width(FILL)
+                .padding(top = 16.dp)
+                .content {
+                    fun textButton(label: String, fg: Int, onTap: () -> Unit) {
+                        val b = add<TextView>()
+                            .text(label)
+                            .textSize(14f)
+                            .textColor(fg)
+                            .gravity(Gravity.CENTER)
+                            .padding(top = 11.dp, bottom = 11.dp)
+                        (b.layoutParams as LinearLayout.LayoutParams).apply { width = 0; weight = 1f }
+                        b.margin(left = 4.dp, right = 4.dp)
+                        b.background(GradientDrawable().apply {
+                            setColor(M3.surfaceContainer)
+                            cornerRadius = 14.dp.toFloat()
+                        })
+                        b.rippleTouch()
+                        b.onClick(onTap)
+                    }
+                    textButton("取消", M3.onSurfaceVariant) { dialog.dismiss() }
+                    textButton("确定", ACCENT) { confirm() }
+                }
+        }
+
+        // Wrap in a ScrollView so that when the soft keyboard shrinks the window (ADJUST_RESIZE), the
+        // 取消/确定 buttons stay reachable by scrolling instead of being clipped off the bottom on the
+        // 480x480 watch screen. The rounded background stays on the panel; the ScrollView is transparent.
+        val scroll = ScrollView(this).apply {
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(panel, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+
+        dialog.setContentView(scroll)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            val w = (resources.displayMetrics.widthPixels * 0.82f).toInt()
+            val maxH = (resources.displayMetrics.heightPixels * 0.85f).toInt()
+            panel.measure(
+                View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            val h = if (panel.measuredHeight > maxH) maxH else ViewGroup.LayoutParams.WRAP_CONTENT
+            setLayout(w, h)
+            setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or
+                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            )
+        }
+        dialog.show()
+        edit.requestFocus()
+    }
+
+    /**
      * Show the About page (version + credits + 检查更新) as a full-screen raw [Dialog]. The settings
      * activity is a plain [android.app.Activity] (no androidx FragmentManager), so it can't show the
      * [AboutFragment] DialogFragment — instead it hosts the shared [buildAboutView] content directly,
@@ -867,20 +991,36 @@ class 设置页 : SettingsActivity() {
     ) = card { card ->
         card.vertical()
         lateinit var valueLabel: TextView
+        val steps = ((max - min) * 100).roundToInt()
+        lateinit var seek: SeekBar
         card.content {
             add<LinearLayout>()
                 .width(FILL)
                 .content {
                     titleColumn(title, desc).weight(1f)
+                    // Tap the value to type an exact number (a precise alternative to dragging on the
+                    // tiny watch screen). The faint rounded chip signals it's interactive.
                     valueLabel = add<TextView>()
                         .text(format(pref.value))
                         .textSize(14f)
                         .textColor(ACCENT)
-                        .gravity(Gravity.CENTER_VERTICAL)
+                        .gravity(Gravity.CENTER)
+                        .padding(left = 12.dp, top = 4.dp, right = 12.dp, bottom = 4.dp)
+                    valueLabel.background(GradientDrawable().apply {
+                        setColor(M3.surfaceContainerHigh)
+                        cornerRadius = 10.dp.toFloat()
+                    })
+                    valueLabel.rippleTouch()
+                    valueLabel.onClick {
+                        showNumberInput(title, pref.value, min, max) { v ->
+                            pref.value = v
+                            valueLabel.text = format(v)
+                            seek.progress = ((v - min) * 100).roundToInt().coerceIn(0, steps)
+                        }
+                    }
                 }
         }
-        val steps = ((max - min) * 100).roundToInt()
-        val seek = mdSeekBar()
+        seek = mdSeekBar()
             .progressMax(steps)
             .onProgressChanged { p, fromUser ->
                 val v = min + p / 100f
