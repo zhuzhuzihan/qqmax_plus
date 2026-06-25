@@ -413,6 +413,7 @@ class 设置页 : SettingsActivity() {
             switch("识别无前缀链接", "同时识别不带 http(s):// 的网址，如 example.com/x", Settings.wideUrlMatch)
             switch("识别号码", "把消息中的 6-15 位数字(QQ号/群号)变为可点击，点击可搜索好友/群", Settings.parseNumber)
             switch("识别@成员", "群聊中把 @成员 及灰条提示中的成员名变为可点击，点击打开其资料卡(同点头像/昵称)", Settings.parseAtMember)
+            switch("高亮@我", "群聊中 @我自己 的提及用错误色高亮，使之更醒目(需开启识别@成员)", Settings.highlightSelfMention)
             switch("链接预览", "消息含链接时尝试解析网站图标、标题与简介，显示在消息下方", Settings.enableLinkPreview)
             colorPicker("链接颜色", "可点击链接/号码/@成员的文字颜色，留空为默认", Settings.linkColor, MaterialColors.ACCENT,
                 { M3.parseColorOrNull(Settings.linkColor.value) ?: M3.primary })

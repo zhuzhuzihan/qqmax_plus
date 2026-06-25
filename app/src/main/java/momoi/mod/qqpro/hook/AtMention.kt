@@ -15,7 +15,9 @@ import com.tencent.qqnt.watch.profile.ProfileData
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentGroupMembers
+import momoi.mod.qqpro.hook.action.SelfContact
 import momoi.mod.qqpro.hook.action.isGroup
+import momoi.mod.qqpro.lib.material.M3
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.util.resolveLinkColor
 import mqq.app.MobileQQ
@@ -130,15 +132,21 @@ private fun MemberInfo.showName(): String =
     cardName.ifEmpty { remark.ifEmpty { nick.ifEmpty { uin.toString() } } }
 
 /** A ClickableSpan that opens [member]'s profile card. Uses the user's link color override when
- *  set (so links/numbers/mentions share one color), else the Material accent. */
-private fun memberSpan(member: MemberInfo): ClickableSpan = object : ClickableSpan() {
+ *  set (so links/numbers/mentions share one color), else the Material accent. When [isSelf] is set
+ *  (the mention targets you, and 高亮@我 is on) it's painted in the Material error color instead, so
+ *  a mention of yourself stands out from ordinary mentions. */
+private fun memberSpan(member: MemberInfo, isSelf: Boolean): ClickableSpan = object : ClickableSpan() {
     override fun onClick(widget: View) = widget.openMemberProfile(member)
     override fun updateDrawState(ds: TextPaint) {
         // Resolve against the current (body) text color so the @mention contrasts its own bubble.
-        ds.color = resolveLinkColor(ds.color)
+        ds.color = if (isSelf) M3.error else resolveLinkColor(ds.color)
         ds.isUnderlineText = false
     }
 }
+
+/** True when [member] is the logged-in user (its uid matches our own). */
+private fun MemberInfo.isSelfMember(): Boolean =
+    uid.isNotEmpty() && uid == SelfContact.peerUid
 
 /** True if any ClickableSpan already covers [start,end) in [sp]. */
 private fun hasClickableSpan(sp: Spannable, start: Int, end: Int): Boolean =
@@ -194,7 +202,8 @@ fun TextView.parseAtMembers() {
             if (match != null) {
                 val end = i + 1 + match.first.length
                 if (!hasClickableSpan(sp, i, end)) {
-                    sp.setSpan(memberSpan(match.second), i, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    val isSelf = Settings.highlightSelfMention.value && match.second.isSelfMember()
+                    sp.setSpan(memberSpan(match.second, isSelf), i, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                     added = true
                     i = end
                     continue

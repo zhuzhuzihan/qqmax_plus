@@ -194,6 +194,10 @@ object Settings {
     // system tips) tappable — opens the member's profile card, same as tapping their
     // avatar/name.
     val parseAtMember = BooleanPref("parseAtMember", true)
+    // When an @mention in a group message targets YOU, paint it in the Material error
+    // color so a mention of yourself stands out from ordinary mentions. Needs
+    // parseAtMember on (the mention must be linkified first).
+    val highlightSelfMention = BooleanPref("highlightSelfMention", true)
     // Try to resolve a client-side preview (icon/title/description) for links in
     // messages and show it below the text. Makes a network request per unique link.
     val enableLinkPreview = BooleanPref("enableLinkPreview", true)
@@ -382,7 +386,7 @@ object Settings {
         hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
-        galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, enableLinkPreview,
+        galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, textSizeScale, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
