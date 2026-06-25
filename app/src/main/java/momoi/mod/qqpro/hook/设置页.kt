@@ -347,7 +347,6 @@ class 设置页 : SettingsActivity() {
                 { M3.parseColorOrNull(Settings.textColorSelf.value) ?: M3.onColor(BubbleCorner.resolvedBubbleColor(1)) })
             colorPicker("对方文字颜色", "留空为自动对比对方气泡色", Settings.textColor, MaterialColors.ON,
                 { M3.parseColorOrNull(Settings.textColor.value) ?: M3.onColor(BubbleCorner.resolvedBubbleColor(0)) })
-            slider("文字大小", "聊天消息文字大小倍率，默认 1.0", Settings.textSizeScale, min = 0.5f, max = 2.5f)
             chatBackgroundPicker()
             slider("背景变暗程度", "调暗背景图以便看清文字，重进聊天页生效", Settings.chatBgDarken, min = 0f, max = 0.9f)
         },

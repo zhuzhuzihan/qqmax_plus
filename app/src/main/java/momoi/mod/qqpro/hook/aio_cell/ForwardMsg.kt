@@ -452,10 +452,10 @@ class DetailFragment(private val contact: Contact, private val data: ForwardMsgD
                                             group.background(roundCornerDrawable(bubbleColor, Settings.bubbleCornerRadius.value.dpf))
                                             val summary = scaleEmojiSpans(
                                                 MsgUtil.summary(textElements),
-                                                Settings.textSizeScale.value
+                                                Settings.chatScale.value
                                             )
                                             add<TextView>()
-                                                .textSize(14f * Settings.textSizeScale.value)
+                                                .textSize(14f * Settings.chatScale.value)
                                                 .textColor(msgTextColor)
                                                 .text(summary)
                                                 .longClickable {

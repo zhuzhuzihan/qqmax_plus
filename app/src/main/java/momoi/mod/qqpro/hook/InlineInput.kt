@@ -260,7 +260,7 @@ object InlineInput {
         editText.onBackspaceWhenEmpty = { cancelReplyOrEdit() }
         // Match the chat message text size multiplier so the inline input box scales with it.
         // Capture the native size in a tag the first time so re-registers never compound.
-        val scale = Settings.textSizeScale.value
+        val scale = Settings.chatScale.value
         if (scale != 1.0f) {
             val base = editBaseTextSize.getOrPut(editText) { editText.textSize }
             editText.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, base * scale)

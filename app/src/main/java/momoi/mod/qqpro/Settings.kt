@@ -227,9 +227,6 @@ object Settings {
     // Override the color of tappable links/numbers/@mentions in chat text. Blank keeps the
     // platform default link color.
     val linkColor = StringPref("linkColor", "")
-    // Multiplier applied to chat message text size (1.0 = original). Applies to all message text
-    // (plain, text+image and special cells), independent of the overall 缩放/聊天文本缩放 settings.
-    val textSizeScale = FloatPref("textSizeScale", 1.0f)
     // Contacts page (2nd main page): show "好友"/"群聊" section headers, split the single
     // "我的通知" entry into separate friend/group notification entries (each with its own
     // count and direct navigation), and drop the trailing group icon on every group row.
@@ -395,7 +392,7 @@ object Settings {
         floatUnreadInChat, titlebarHeight, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
-        picMaxHeightRatio, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, textSizeScale, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
+        picMaxHeightRatio, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
