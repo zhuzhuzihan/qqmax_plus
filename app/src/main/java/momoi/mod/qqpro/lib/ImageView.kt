@@ -3,7 +3,6 @@ package momoi.mod.qqpro.lib
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
-import android.graphics.Rect
 import android.graphics.drawable.AnimatedImageDrawable
 import android.os.Build
 import android.widget.ImageView
@@ -117,21 +116,29 @@ fun ImageView.bitmapDecodeAssets(path: String) =
     }
 
 inline fun ImageView.bitmapDecodeStream(streamProvider: (reread: Boolean)->InputStream): Bitmap? {
-    val rect = Rect()
-    BitmapFactory.decodeStream(streamProvider(false), rect, BitmapFactory.Options().apply {
-        inJustDecodeBounds = true
-    })
+    // Read the source dimensions from the bounds Options' outWidth/outHeight — NOT from a Rect.
+    // decodeStream(is, outPadding, opts) writes the size into opts.outWidth/outHeight and only touches
+    // the Rect for nine-patch padding; reading the Rect left srcW/H at 0 for normal photos, so every
+    // downsample check below was skipped and a full-res image decoded straight into an onDraw crash.
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeStream(streamProvider(false), null, bounds)
+    val srcW = bounds.outWidth
+    val srcH = bounds.outHeight
     val bitmap = BitmapFactory.decodeStream(streamProvider(true), null, BitmapFactory.Options().apply {
         var sample = 1
         // Existing behavior: downsample toward maxHeight when the view has one set.
-        if (rect.height() > 300 && maxHeight > 0 && rect.height() > maxHeight) {
-            while (rect.height() / (sample * 2) >= maxHeight) sample *= 2
+        if (srcH > 300 && maxHeight > 0 && srcH > maxHeight) {
+            while (srcH / (sample * 2) >= maxHeight) sample *= 2
         }
-        // Hard safety cap (independent of maxHeight): the full-screen viewer's ImageView has
-        // maxHeight=0, so without this a full-resolution photo decodes at full size and crashes
-        // onDraw with "trying to draw too large bitmap". Raise the sample until it fits the budget.
-        while (rect.width() > 0 && rect.height() > 0 &&
-            (rect.width().toLong() / sample) * (rect.height() / sample) * 4 > MAX_DECODE_BYTES) {
+        // Hard safety cap (independent of maxHeight): the full-screen viewer's ImageView has no
+        // maxHeight, so without this a full-resolution photo decodes at full size and crashes onDraw
+        // with "trying to draw too large bitmap". Raise the sample until it fits the byte budget AND
+        // keeps the longest side within a GPU-safe texture size.
+        while (srcW > 0 && srcH > 0 &&
+            (srcW.toLong() / sample) * (srcH / sample) * 4 > MAX_DECODE_BYTES) {
+            sample *= 2
+        }
+        while (srcW > 0 && srcH > 0 && maxOf(srcW / sample, srcH / sample) > SAFE_MAX_DIM) {
             sample *= 2
         }
         inSampleSize = sample
