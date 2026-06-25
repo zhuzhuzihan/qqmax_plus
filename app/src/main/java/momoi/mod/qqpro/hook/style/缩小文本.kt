@@ -54,7 +54,13 @@ abstract class 缩小文本 : BaseWatchItemCell<WatchAIOMsgItem, View>() {
     }
 
     fun resize(view: View) {
-        if (view is TextView && view.currentTextColor == 0xFF_FFFFFF.toInt()) {
+        // Resize every body TextView regardless of its themed color. resize only ever walks
+        // contentWidget's direct children (the message body), so there's nothing else to exclude.
+        // The old `currentTextColor == 0xFFFFFFFF` gate was wrong now that AIOCell.applyMsgTextStyle
+        // recolors self-side body text to a non-pure-white contrast color (textColorSelf): self
+        // bubbles then failed the gate and rendered un-shrunk at native size while received text
+        // (resolved to pure white) shrank — the single sizer must cover both sides uniformly.
+        if (view is TextView) {
             // Size in absolute px against AutoSize's stable target scaledDensity rather than the
             // view's ambient scaledDensity. Visiting the Settings activity can leave the shared
             // displayMetrics at a stale density; using SP would then make chat text shrink until a
