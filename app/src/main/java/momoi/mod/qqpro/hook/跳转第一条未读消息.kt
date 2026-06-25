@@ -152,22 +152,35 @@ class SkipAction(
             CurrentMsgList.findMsg(h.seq, onProgress, result = { msg ->
                 isClicked = false
                 if (msg == null) { onFail(); return@findMsg }
-                rv.smoothScrollToStart(CurrentMsgList.getMsgIndex(msg))
+                rv.safeSmoothToStart(CurrentMsgList.getMsgIndex(msg))
             })
         } else when {
             // Terminal first-unread stop, jumped the count-based way (no single msgSeq).
             lastUnreadMsg != null ->
                 CurrentMsgList.upwardMsg(CurrentMsgList.getMsgIndex(lastUnreadMsg!!), count, onProgress, onFail) {
                     isClicked = false
-                    rv.smoothScrollToStart(it)
+                    rv.safeSmoothToStart(it)
                 }
             list.isNotEmpty() && count > 0 ->
                 CurrentMsgList.upwardMsg(list.size - 1, count - 1, onProgress, onFail) {
                     isClicked = false
-                    rv.smoothScrollToStart(it)
+                    rv.safeSmoothToStart(it)
                 }
             else -> isClicked = false
         }
+    }
+
+    /**
+     * Smooth-scroll [pos] to the top, but tolerate the out-of-range positions the count-based
+     * [CurrentMsgList.upwardMsg] math can yield (e.g. -1 when the target resolves to the newest
+     * message). The old code used [RecyclerView.scrollToPosition], which silently no-ops on an
+     * invalid position; [smoothScrollToStart] instead throws "Invalid target position", so clamp:
+     * a negative target means "nothing above to scroll to" → no-op (matches the old behavior).
+     */
+    private fun RecyclerView.safeSmoothToStart(pos: Int) {
+        val n = layoutManager?.itemCount ?: 0
+        if (n <= 0 || pos < 0) return
+        smoothScrollToStart(if (pos >= n) n - 1 else pos)
     }
 }
 @Mixin
