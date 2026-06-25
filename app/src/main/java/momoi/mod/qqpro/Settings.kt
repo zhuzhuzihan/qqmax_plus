@@ -78,6 +78,10 @@ object Settings {
     // Show an emoji button in the inline input pill while typing. Tapping it collapses the keyboard
     // and opens a sysface picker at the keyboard position that inserts faces into the EditText.
     val inlineEmojiButton = BooleanPref("inlineEmojiButton", true)
+    // Keep the input bar (and its EditText) pinned while scrolling chat history. Natively the bar
+    // collapses to just the up-arrow whenever the list isn't at the bottom; with this on we keep it in
+    // the floating overlay mode so it stays over the chat. Default off (native behavior).
+    val keepInputBarOnScroll = BooleanPref("keepInputBarOnScroll", false)
     // Remember the inline input box contents (typed text, @/image tokens and the reply target)
     // per chat. Leaving a chat with an unsent draft and coming back restores it. Requires
     // fullInlineInput. Drafts are kept in memory for the app session, cleared once the message is sent.
@@ -385,7 +389,7 @@ object Settings {
         themeSurface, themeSurfaceContainer, themeSurfaceContainerHigh, themeSurfaceVariant,
         themeOnSurface, themeOnSurfaceVariant, themeOnSurfaceTip, themeHint, themeOutline, themeOutlineVariant, themeError, lightMode,
         showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, replaceGroupNick, showMemberLevel, inlineSendButton,
-        inlineChatInput, fullInlineInput, inlineEmojiButton, rememberDraft, emojiPickerToInput, materializeChat,
+        inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
         hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,

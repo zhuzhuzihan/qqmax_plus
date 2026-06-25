@@ -312,6 +312,7 @@ class 设置页 : SettingsActivity() {
             switch("表情选择器插入输入框", "从系统表情选择器选择表情/图片/GIF 时不立即发送，而是作为 [表情]/[图片] 插入输入框，可继续编辑一起发送(需开启“完全行内输入”)", Settings.emojiPickerToInput)
             switch("附件浮层", "用输入框左侧 + 键打开附件浮层，移除附件翻页；表情移入附件列表(重进聊天页生效)", Settings.attachmentOverlay)
             switch("单行输入", "输入框固定为单行显示", Settings.singleLineInput)
+            switch("滚动时保持输入栏", "向上翻看历史消息时保持底部输入栏(及输入框)显示；关闭(默认)则像原生一样滚动时收起为上箭头(重进聊天页生效)", Settings.keepInputBarOnScroll)
             switch("输入键居中", "在聊天页面将输入键居中放置", Settings.swapCenterKeyboard)
             switch("隐藏语音按钮", "在聊天页隐藏语音(麦克风)按钮，所有输入模式下均生效", Settings.hideVoiceButton)
             switch("全员禁言隐藏输入栏", "群全员禁言且自己非群主/管理员时，隐藏底部输入栏，改为显示“全员禁言中”提示", Settings.muteHideInputBar)
