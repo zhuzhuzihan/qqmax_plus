@@ -56,6 +56,38 @@ object QzoneFeedM3 {
 
     private val adapters = WeakHashMap<Any, FeedAdapter>()
 
+    // The most-recently installed feed's pull-refresh host, so write flows (publish / comment) can ask
+    // the native engine to reload from the server — which fires O() and re-feeds our M3 adapter.
+    private var activeSrl: java.lang.ref.WeakReference<SmartRefreshLayout>? = null
+
+    /**
+     * Re-bind the feed cards in place (no server reload, no re-sort, no scroll) so a card reflects an
+     * edit made to its shared [BusinessFeedData] elsewhere — e.g. a comment added/deleted in the
+     * comment thread. Use this instead of [refreshActiveFeed] for comment edits: a full refresh would
+     * jump the reading position. Notifies all installed feed adapters; only the one holding the edited
+     * post actually changes.
+     */
+    fun notifyFeeds() {
+        runCatching { adapters.values.toList().forEach { it.notifyDataSetChanged() } }
+            .onFailure { Utils.log("QzoneFeedM3.notifyFeeds: $it") }
+    }
+
+    /**
+     * Trigger the native pull-to-refresh on the active feed (after a short delay so a just-posted
+     * comment/feed has reached the server). Invokes the SmartRefreshLayout's stored OnRefreshListener
+     * (`s0`, method `m`) — the same path as a manual pull — which reloads and fires [QZoneMainFrame.O].
+     */
+    fun refreshActiveFeed(delayMs: Long = 800L) {
+        val srl = activeSrl?.get() ?: run { Utils.log("QzoneFeedM3.refreshActiveFeed: no active feed"); return }
+        srl.postDelayed({
+            runCatching {
+                val listener = srl.s0 ?: run { Utils.log("QzoneFeedM3.refreshActiveFeed: no OnRefreshListener"); return@postDelayed }
+                listener.m(srl)
+                Utils.log("QzoneFeedM3: triggered feed refresh")
+            }.onFailure { Utils.log("QzoneFeedM3.refreshActiveFeed invoke: $it") }
+        }, delayMs)
+    }
+
     fun installMine(f: QZoneMineFragment) = install(f, f as IAdapterHost, "i", "k", perUser = true)
     fun installMain(f: QZoneMainFrame) = install(f, f as IAdapterHost, "n", "o", perUser = false)
     fun feedMine(f: QZoneMineFragment) = feed(f, "k")
@@ -72,6 +104,7 @@ object QzoneFeedM3 {
             runCatching { srl.setBackgroundColor(M3.surface); rv.setBackgroundColor(M3.surface) }
             val adapter = FeedAdapter(host, perUser)
             adapters[key] = adapter
+            activeSrl = java.lang.ref.WeakReference(srl)
             rv.adapter = adapter
             // Seed from any data the native adapter already holds (e.g. after a config change).
             nativeList(key, adapterField)?.let { adapter.submit(it) }

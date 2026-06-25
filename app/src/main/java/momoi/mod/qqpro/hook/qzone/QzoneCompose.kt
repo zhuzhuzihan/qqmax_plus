@@ -473,8 +473,13 @@ class ComposeFragment(
             }
             Utils.log("QzoneCompose: published (textLen=${text.length}, media=${media.size}, loc=$locationName)")
         }.onFailure { Utils.log("QzoneCompose send: $it") }.isSuccess
-        if (ok) { Utils.toast(requireContext(), "已发表"); runCatching { dismiss() } }
-        else Utils.toast(requireContext(), "发表失败")
+        if (ok) {
+            Utils.toast(requireContext(), "已发表")
+            runCatching { dismiss() }
+            // The new post lands on the feed only after the engine reloads — pull-refresh it (a media
+            // post uploads via the queue, so give it a little longer than a text-only post).
+            QzoneFeedM3.refreshActiveFeed(if (media.isNotEmpty()) 2500L else 1200L)
+        } else Utils.toast(requireContext(), "发表失败")
     }
 
     /** Walk the editor text, replacing each atomic [AtTag] run with @{uin:..,nick:..}. */

@@ -11,7 +11,9 @@ import android.widget.TextView
 import com.tencent.watch.qzone_impl.common.QZoneBusinessLooper
 import com.tencent.watch.qzone_impl.common.task.QZoneTask
 import com.tencent.watch.qzone_impl.feed.model.BusinessFeedData
+import com.tencent.watch.qzone_impl.feed.model.CellCommentInfo
 import com.tencent.watch.qzone_impl.feed.model.Comment
+import com.tencent.watch.qzone_impl.feed.model.User
 import com.tencent.watch.qzone_impl.frame.IAdapterHost
 import com.tencent.watch.qzone_impl.protocol.request.QZoneAddCommentRequest
 import com.tencent.watch.qzone_impl.protocol.request.QZoneAddReplyRequest
@@ -20,6 +22,7 @@ import com.tencent.watch.qzone_impl.protocol.request.QzoneDeleteReplyRequest
 import com.tencent.watch.qzone_impl.service.QZoneWriteOperationService
 import com.tencent.watch.qzone_impl.utils.UinUtils
 import NS_MOBILE_FEEDS.Reply
+import momoi.mod.qqpro.hook.ProfileDetailCard
 import momoi.mod.qqpro.hook.openUserQzone
 import momoi.mod.qqpro.hook.view.MyDialogFragment
 import momoi.mod.qqpro.lib.dp
@@ -216,11 +219,16 @@ class QzoneCommentThread(
             // Optimistic local removal so the thread updates immediately.
             runCatching {
                 when (target) {
-                    is Comment -> d.cellCommentInfo?.c?.remove(target)
+                    is Comment -> {
+                        d.cellCommentInfo?.let { ci -> if (ci.c?.remove(target) == true && ci.b > 0) ci.b -= 1 }
+                    }
                     is Reply -> parent.replies?.remove(target)
                 }
             }
             rebuildList(d)
+            // Re-bind the matching feed card so the post's comment list/count updates too (no full
+            // refresh — that would jump the feed's scroll position).
+            QzoneFeedM3.notifyFeeds()
             Utils.toast(requireContext(), "已删除")
         }.onFailure { Utils.log("QzoneCommentThread delete: $it"); Utils.toast(requireContext(), "删除失败") }
     }
@@ -273,17 +281,60 @@ class QzoneCommentThread(
         val text = input?.trimmedText().orEmpty()
         if (text.isBlank()) { Utils.toast(requireContext(), "内容为空"); return }
         if (QzoneActions.isFake(d)) { Utils.toast(requireContext(), "正在发布, 请稍后"); return }
+        val target = replyTo
         val ok = runCatching {
-            val target = replyTo
             if (target == null) postComment(d, text) else postReply(d, target, text)
         }.onFailure { Utils.log("QzoneCommentThread send: $it") }.isSuccess
         if (ok) {
             input?.setText("")
             setReplyTarget(null)
+            // Show it immediately (the server write is async) by inserting an optimistic fake
+            // comment/reply into the SAME feed-data object the thread and feed card share, then
+            // rebuilding the thread — exactly like the delete path. We deliberately do NOT pull-refresh
+            // the whole feed here: a comment must not re-sort/scroll the feed (that jumps the reading
+            // position). Feed refresh is only correct after publishing a NEW post.
+            runCatching { insertOptimistic(d, target, text) }
+                .onFailure { Utils.log("QzoneCommentThread optimistic: $it") }
             Utils.toast(requireContext(), "已发送")
         } else {
             Utils.toast(requireContext(), "发送失败")
         }
+    }
+
+    /** Insert an optimistic (isFake) comment/reply into the local feed data + rebuild, for instant
+     *  feedback before the async server write lands. A later refresh replaces it with real data. */
+    private fun insertOptimistic(d: BusinessFeedData, target: ReplyTarget?, text: String) {
+        val self = User(UinUtils.b(), ProfileDetailCard.selfNick() ?: "")
+        if (target == null) {
+            val c = Comment().apply {
+                comment = text; user = self; commentid = ""; isFake = true; replies = ArrayList()
+            }
+            // A post with no comments yet may have a null cellCommentInfo. Its Kotlin property is
+            // read-only (getter + field), so create + attach one via the public field by reflection.
+            val ci = d.cellCommentInfo ?: CellCommentInfo().also { fresh ->
+                runCatching { d.javaClass.getField("cellCommentInfo").set(d, fresh) }
+                    .onFailure { Utils.log("QzoneCommentThread: set cellCommentInfo failed: $it") }
+            }
+            if (ci.c == null) ci.c = ArrayList()
+            ci.c.add(c)
+            ci.b += 1
+            Utils.log("QzoneCommentThread: optimistic comment added (total ${ci.c.size})")
+        } else {
+            val reply = Reply().apply {
+                content = text; user = self
+                targetUser = User(target.targetUin, target.targetNick); isFake = true
+            }
+            val pc = target.comment
+            val replies = (pc.replies as? MutableList<Reply>) ?: ArrayList<Reply>().also { pc.replies = it }
+            replies.add(reply)
+            Utils.log("QzoneCommentThread: optimistic reply added (total ${replies.size})")
+        }
+        rebuildList(d)
+        // Re-bind the matching feed card so the post's comment list/count reflects the add too
+        // (local only — no full refresh, so the feed's scroll position is untouched).
+        QzoneFeedM3.notifyFeeds()
+        // Scroll the thread so the freshly added row is visible.
+        (listColumn?.parent as? ScrollView)?.post { (listColumn?.parent as? ScrollView)?.fullScroll(View.FOCUS_DOWN) }
     }
 
     private fun postComment(d: BusinessFeedData, text: String) {
