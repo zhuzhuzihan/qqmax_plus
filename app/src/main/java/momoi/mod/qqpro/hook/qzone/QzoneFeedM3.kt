@@ -276,7 +276,11 @@ object QzoneFeedCard {
             setTextColor(M3.onSurface); textSize = 13f
             setLineSpacing(2.dp.toFloat(), 1f)
         }
-        val isMiniApp = runCatching { QZoneMiniApp.bindText(bodyTv, data) }.getOrDefault(false)
+        // Main body: only render a mini-app card for a DIRECT share (no originalInfo fallback) — a
+        // forwarded mini-app's card is rendered once by the quote section below, so falling back to
+        // originalInfo here would render it twice.
+        val isMiniApp = runCatching { QZoneMiniApp.bindText(bodyTv, data, allowOriginalFallback = false) }
+            .getOrDefault(false)
         if (!isMiniApp) {
             val parsed = parsedBody(data, bodyTv)
             if (!parsed.isNullOrBlank()) {
@@ -288,8 +292,11 @@ object QzoneFeedCard {
         }
 
         // --- forwarded original quote: "@原作者：内容" on one line, like the phone ---
+        // Skip when the body already rendered a mini-app card: a direct 小程序 share carries the same
+        // mini-app in both [data] and [data.originalInfo], so the quote would just duplicate the card.
+        // A genuine forward-with-comment keeps its comment in [data] (isMiniApp false) and still quotes.
         runCatching {
-            val orig = data.originalInfo
+            val orig = if (isMiniApp) null else data.originalInfo
             if (orig != null) {
                 val quote = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL

@@ -70,10 +70,14 @@ object QZoneMiniApp {
      * native ContentSummeryViewHolder no longer runs). Returns true if [data] is a mini-app share (so
      * the caller knows to keep this TextView even though the post has no normal summary text).
      */
-    fun bindText(tv: TextView, data: BusinessFeedData): Boolean {
+    fun bindText(tv: TextView, data: BusinessFeedData, allowOriginalFallback: Boolean = true): Boolean {
         if (!Settings.qzoneMiniAppCard.value) return false
         // Only a placeholder post (no renderable summary) carrying a fakeUrl is a mini-app share.
-        val t = runCatching { data.originalInfo }.getOrNull() ?: data
+        // A direct share keeps the payload in [data] (originalInfo null → falls through to data); a
+        // FORWARD keeps it in originalInfo. The materialized feed renders the forwarded original in its
+        // own quote box, so the main-body call passes allowOriginalFallback=false to avoid rendering
+        // the same card twice (once in the body via this fallback, once in the quote).
+        val t = (if (allowOriginalFallback) runCatching { data.originalInfo }.getOrNull() else null) ?: data
         if (runCatching { t.getCellSummaryV2() }.getOrNull() != null) { clear(tv); return false }
         val op = runCatching { t.cellOperationInfo }.getOrNull() ?: run { clear(tv); return false }
         val fakeUrl = extractFakeUrl(op.busiParam) ?: run { clear(tv); return false }
