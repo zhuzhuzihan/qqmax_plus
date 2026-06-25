@@ -32,7 +32,13 @@ abstract class 缩小文本 : BaseWatchItemCell<WatchAIOMsgItem, View>() {
         // Market-face (sticker / saved image-emoji) cells render their image into an ImageView and
         // carry no picElement; capture it so it can be opened fullscreen / copied / shared.
         if (item is WatchMarketFaceMsgItem) {
-            MarketFaceImage.onBind(item.d.msgId, view)
+            // The element's dynamicFacePath is the local animated (GIF/WebP) file — pass it so the
+            // sticker PLAYS fullscreen instead of opening a frozen single-frame snapshot.
+            val animatedPath = runCatching {
+                item.d.elements?.firstNotNullOfOrNull { it.marketFaceElement?.dynamicFacePath }
+                    ?.takeIf { it.isNotEmpty() }
+            }.getOrNull()
+            MarketFaceImage.onBind(item.d.msgId, view, animatedPath)
         }
         // Grey-tip system messages ("xxx撤回了…", join/time tips) are a WatchGrayTipsCell — a single
         // #99ffffff TextView (NOT an AIOCellGroupWidget), so the cell view IS that TextView. Recolor it

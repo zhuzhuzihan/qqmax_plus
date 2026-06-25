@@ -7,6 +7,7 @@ import android.graphics.Rect
 import android.graphics.drawable.AnimatedImageDrawable
 import android.os.Build
 import android.widget.ImageView
+import androidx.core.view.doOnLayout
 import momoi.mod.qqpro.util.Utils
 import java.io.File
 import java.io.InputStream
@@ -27,21 +28,36 @@ fun <T : ImageView> T.adjustViewBounds(adjust: Boolean = true) = apply {
     adjustViewBounds = adjust
 }
 
-/** Reads the first bytes and returns true if the file starts with the GIF magic ("GIF8"). */
-private fun File.isGif(): Boolean = try {
+/**
+ * Sniff the first bytes for an animated container. ImageDecoder can play both animated GIF and
+ * animated WebP (QQ market-face / 收藏表情 stickers are often WebP), so route both through it; a
+ * static GIF/WebP just decodes to a normal drawable. Extension is ignored — QQ stores some GIFs
+ * with a `.jpg` name, so only the magic bytes are trustworthy.
+ */
+private fun File.isAnimatableImage(): Boolean = try {
     inputStream().use { s ->
-        val head = ByteArray(4)
-        s.read(head) == 4 && head[0] == 'G'.code.toByte() && head[1] == 'I'.code.toByte() &&
-            head[2] == 'F'.code.toByte() && head[3] == '8'.code.toByte()
+        val h = ByteArray(12)
+        val n = s.read(h)
+        fun b(i: Int, c: Char) = h[i] == c.code.toByte()
+        when {
+            // "GIF8" (GIF87a / GIF89a)
+            n >= 4 && b(0, 'G') && b(1, 'I') && b(2, 'F') && b(3, '8') -> true
+            // "RIFF"<size>"WEBP"
+            n >= 12 && b(0, 'R') && b(1, 'I') && b(2, 'F') && b(3, 'F') &&
+                b(8, 'W') && b(9, 'E') && b(10, 'B') && b(11, 'P') -> true
+            else -> false
+        }
     }
 } catch (e: Exception) {
     false
 }
 
 fun ImageView.bitmapDecodeFile(file: File) {
-    // Animated GIFs must be decoded into an AnimatedImageDrawable, otherwise BitmapFactory
+    // Animated GIFs/WebP must be decoded into an AnimatedImageDrawable, otherwise BitmapFactory
     // only yields the first static frame (no animation). API 28+ has ImageDecoder.
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && file.isGif()) {
+    val animatable = file.isAnimatableImage()
+    Utils.log("bitmapDecodeFile: animatable=$animatable size=${file.length()} path=${file.name}")
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && animatable) {
         try {
             val limit = maxHeight
             val src = ImageDecoder.createSource(file)
@@ -61,9 +77,16 @@ fun ImageView.bitmapDecodeFile(file: File) {
                 }
                 if (tw != w || th != h) decoder.setTargetSize(tw.coerceAtLeast(1), th.coerceAtLeast(1))
             }
-            post {
+            // Set the drawable only once the view has a size. The native matrix viewer
+            // (RFWMatrixImageView/PhotoView) computes its fit matrix from the view dimensions when the
+            // drawable is set; a plain post() can run after the only layout pass, so for a synchronously
+            // loaded GIF (market-face file already on disk) the fit was computed against a 0-size view
+            // and the image stuck at native size in the top-left corner. doOnLayout fires immediately if
+            // already laid out, else after the next layout — so the fit always sees a real size.
+            doOnLayout {
                 setImageDrawable(drawable)
                 if (drawable is AnimatedImageDrawable) drawable.start()
+                Utils.log("bitmapDecodeFile GIF applied: intrinsic=${drawable.intrinsicWidth}x${drawable.intrinsicHeight} view=${width}x${height}")
             }
             return
         } catch (e: Exception) {
