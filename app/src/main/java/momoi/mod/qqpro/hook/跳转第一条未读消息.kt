@@ -72,7 +72,10 @@ class SkipAction(
         if (Settings.chatImportantJump.value) {
             val seen = HashSet<Long>()
             recent.raw.listOfSpecificEventTypeInfosInMsgBox.orEmpty()
-                .flatMap { e -> e.msgInfos.orEmpty().map { mi -> mi.msgSeq to specificEventLabel(e.eventTypeInMsgBox, mi.highlightDigest) } }
+                // Only recognised highlights (@我/回复/文件/公告 or a real digest). Unrecognised events
+                // (e.g. DM type 1008) get a null label and a bogus msgSeq=1 → drop them, or the chip
+                // shows "[新消息]" for every message and jumps to the top of the chat.
+                .flatMap { e -> e.msgInfos.orEmpty().mapNotNull { mi -> specificEventLabel(e.eventTypeInMsgBox, mi.highlightDigest)?.let { mi.msgSeq to it } } }
                 .filter { it.first > 0L }
                 .sortedByDescending { it.first }     // newest (closest to bottom) first
                 .forEach { (seq, label) -> if (seen.add(seq)) addLast(JumpPoint(seq, label)) }
