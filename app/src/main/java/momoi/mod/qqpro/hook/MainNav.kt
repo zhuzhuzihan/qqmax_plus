@@ -205,6 +205,10 @@ object MainNav {
                 // The bar otherwise sits over the window's pure black; fill it with the M3 page
                 // surface so it matches the materialized pages (chat list etc.) seamlessly.
                 setBackgroundColor(M3.surface)
+                // Stay hidden until positionBar has placed us (bottom/top); otherwise the bar paints
+                // one frame at its default y=0 (top) before the deferred post moves it down — a visible
+                // flash at the top on every return to the home page in bottom mode.
+                visibility = View.INVISIBLE
             }
             val state = NavState(nav, pager, iconMap, pageCount)
             state.current = pager.current()
@@ -565,21 +569,39 @@ object MainNav {
     private fun positionBar(
         parent: ViewGroup, pagerView: View, indicator: View, nav: LinearLayout, barHeight: Int,
     ) {
-        nav.post {
-            runCatching {
-                pagerView.layoutParams = pagerView.layoutParams.apply { height = parent.height - barHeight }
-                pagerView.requestLayout()
-                if (Settings.bottomMainNav.value) {
-                    // Bar at the bottom; content flush to the top.
-                    nav.translationY = (parent.height - barHeight).toFloat()
-                    pagerView.post { pagerView.translationY = -pagerView.top.toFloat() }
-                } else {
-                    // Bar at the top; push content down below it.
-                    nav.translationY = 0f
-                    pagerView.post { pagerView.translationY = (barHeight - pagerView.top).toFloat() }
+        // Position + reveal BEFORE the first draw (not via post): a post() leaves the INVISIBLE bar
+        // unplaced for one painted frame, which shows as a black band flashing before the bar appears.
+        // OnPreDraw runs after layout but before that draw, so the bar is placed and visible on the
+        // very first painted frame of the returned page.
+        nav.viewTreeObserver.addOnPreDrawListener(
+            object : android.view.ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    if (parent.height <= 0) return true   // not measured yet; retry next frame
+                    nav.viewTreeObserver.removeOnPreDrawListener(this)
+                    runCatching {
+                        pagerView.layoutParams =
+                            pagerView.layoutParams.apply { height = parent.height - barHeight }
+                        pagerView.requestLayout()
+                        if (Settings.bottomMainNav.value) {
+                            // Bar at the bottom; content flush to the top.
+                            nav.translationY = (parent.height - barHeight).toFloat()
+                            pagerView.translationY = -pagerView.top.toFloat()
+                        } else {
+                            // Bar at the top; push content down below it.
+                            nav.translationY = 0f
+                            pagerView.translationY = (barHeight - pagerView.top).toFloat()
+                        }
+                        // Final y is set; reveal now so the bar never flashes at its pre-positioned spot.
+                        nav.visibility = View.VISIBLE
+                    }.onFailure {
+                        // Never leave the bar stuck invisible if positioning threw.
+                        nav.visibility = View.VISIBLE
+                        Utils.log("MainNav positionBar failed: $it")
+                    }
+                    return true
                 }
-            }.onFailure { Utils.log("MainNav positionBar failed: $it") }
-        }
+            }
+        )
     }
 
     // Fixed page order: 0=chat, 1=contacts(person), 2=qzone(star), 3=self(settings)
