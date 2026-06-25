@@ -123,6 +123,8 @@ class WatchAIOPageReset : WatchAIOFragment() {
 
     override fun onResume() {
         super.onResume()
+        // One-shot feasibility probe for the store-sticker feature (logs only; no UI). Remove once设计 done.
+        runStickerProbe()
         if (GalleryMultiSelectState.goToChatOnResume) {
             GalleryMultiSelectState.goToChatOnResume = false
             Utils.log("MultiSelect WatchAIOFragment.onResume switching to chat page 0, vp=${f}")

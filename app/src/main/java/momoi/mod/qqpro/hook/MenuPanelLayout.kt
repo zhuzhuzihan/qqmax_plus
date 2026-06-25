@@ -112,6 +112,11 @@ class MenuPanelLayout(p0: (Int) -> Unit, p1: Boolean) : MenuFrame(p0, p1) {
             if (Settings.attachmentOverlay.value && items.none { it is EmojiMenuItem }) {
                 items.add(0, EmojiMenuItem())
             }
+            // 贴纸 — our store-sticker (商城表情) picker. Just below 表情.
+            if (items.none { it is StickerMenuItem }) {
+                val emojiAt = items.indexOfFirst { it is EmojiMenuItem }
+                items.add(if (emojiAt >= 0) emojiAt + 1 else 0, StickerMenuItem(this))
+            }
             adapter.notifyDataSetChanged()
             Utils.log("MenuPanelLayout: injected 录像/音频文件 at $at")
         }.onFailure { Utils.log("MenuPanelLayout: inject 录像 failed: $it") }
@@ -200,6 +205,7 @@ class MenuPanelLayout(p0: (Int) -> Unit, p1: Boolean) : MenuFrame(p0, p1) {
 
     /** Material Symbol path per attachment item label (matches the long-press menu's icon set). */
     private fun materialSymbolFor(text: String): String = when {
+        text.contains("贴纸") -> MaterialSymbols.interests
         text.contains("表情") -> MaterialSymbols.mood
         text.contains("艾特") -> MaterialSymbols.alternate_email
         text.contains("音频") -> MaterialSymbols.audio_file
@@ -212,6 +218,7 @@ class MenuPanelLayout(p0: (Int) -> Unit, p1: Boolean) : MenuFrame(p0, p1) {
     }
 
     private fun iconFor(text: String) = when {
+        text.contains("贴纸") -> MaterialSymbol(MaterialSymbols.interests, M3.primary)
         text.contains("表情") -> emojiIconDrawable()
         text.contains("艾特") -> atIconDrawable()
         text.contains("音频") -> audioFileIconDrawable()
@@ -314,5 +321,24 @@ class EmojiMenuItem : com.tencent.watch.aio_impl.ui.frames.MenuItem() {
     override fun e() {
         runCatching { AttachmentOverlay.emojiAction?.invoke() }
             .onFailure { Utils.log("emoji menu item failed: $it") }
+    }
+}
+
+/**
+ * A panel item that opens our store-sticker (商城表情) picker — the user's owned packs (synced from
+ * the phone), pick one and send it. See [momoi.mod.qqpro.hook.sticker.StickerPickerFragment].
+ */
+class StickerMenuItem(
+    private val fragment: androidx.fragment.app.Fragment
+) : com.tencent.watch.aio_impl.ui.frames.MenuItem() {
+    override fun a() = 0
+    override fun b() = "贴纸"
+    override fun d() = 2
+    override fun e() {
+        runCatching {
+            momoi.mod.qqpro.hook.sticker.StickerPickerFragment()
+                .show(fragment.parentFragmentManager, "qqpro_sticker_picker")
+        }.onFailure { Utils.log("sticker menu item failed: $it") }
+        AttachmentOverlay.dismiss()
     }
 }
