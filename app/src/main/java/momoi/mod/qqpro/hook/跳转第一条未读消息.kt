@@ -34,6 +34,25 @@ import momoi.mod.qqpro.lib.text
 import momoi.mod.qqpro.lib.textColor
 import momoi.mod.qqpro.lib.textSize
 
+/**
+ * One stop the jump chip can take you to. [seq] is the msgSeq of an important unread message
+ * (@我/回复/新文件/新公告); a [seq] of null is the terminal "first unread" stop, which is jumped to
+ * the count-based way (it has no single msgSeq).
+ */
+private data class JumpPoint(val seq: Long?, val label: String)
+
+/**
+ * The top-right "↑ X条新消息" jump chip. When [Settings.chatImportantJump] is on it steps through the
+ * important unread messages one at a time, bottom→top (newest unread first), before the final stop at
+ * the first unread; with it off it behaves as the plain first-unread jump.
+ *
+ * The important stops come from the same kernel signal the conversation-list tags read
+ * ([RecentContacts.Data.raw].listOfSpecificEventTypeInfosInMsgBox → each msg's msgSeq + label). They
+ * are visited newest→oldest because that is the order you encounter them scrolling up from the bottom.
+ * A stop clears (and the chip advances to the next, older one) as soon as its message scrolls into
+ * view — whether you got there by tapping the chip or by scrolling manually. When the queue empties
+ * (the first unread is reached) the chip hides.
+ */
 class SkipAction(
     private val rv: RecyclerView,
     private val tv: TextView,
@@ -41,61 +60,113 @@ class SkipAction(
 ): View.OnClickListener {
 
     private fun format(count: Int) = "↑ ${count}条新消息"
-    private var count = recent.unreadCntCached
+    private val unreadTotal = recent.unreadCntCached
+    private var count = unreadTotal                 // remaining unread toward the first-unread stop
     private var lastUnreadMsg: WatchAIOMsgItem? = null
     private var isClicked = false
+    private var isFinished = false
+
+    // Ordered stops: important messages newest→oldest, then a terminal first-unread stop (seq=null).
+    // When the setting is off the important stops are skipped → only the terminal stop remains.
+    private val points: ArrayDeque<JumpPoint> = ArrayDeque<JumpPoint>().apply {
+        if (Settings.chatImportantJump.value) {
+            val seen = HashSet<Long>()
+            recent.raw.listOfSpecificEventTypeInfosInMsgBox.orEmpty()
+                .flatMap { e -> e.msgInfos.orEmpty().map { mi -> mi.msgSeq to specificEventLabel(e.eventTypeInMsgBox, mi.highlightDigest) } }
+                .filter { it.first > 0L }
+                .sortedByDescending { it.first }     // newest (closest to bottom) first
+                .forEach { (seq, label) -> if (seen.add(seq)) addLast(JumpPoint(seq, label)) }
+        }
+        addLast(JumpPoint(null, format(unreadTotal)))
+        Utils.log("SkipAction: ${size} stop(s) -> ${joinToString { it.label }}")
+    }
+
+    private fun head(): JumpPoint? = points.firstOrNull()
+
+    /** Repaint the chip for the current head stop (terminal stop shows the live remaining count). */
+    private fun refreshLabel() {
+        val h = head() ?: return hide()
+        tv.text = if (h.seq == null) format(count) else "↑ ${h.label}"
+    }
+
+    private fun hide() {
+        isFinished = true
+        tv.visibility = View.GONE
+    }
 
     init {
-        tv.text = format(count)
+        refreshLabel()
         tv.setOnClickListener(this)
         rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            var isFinished = false
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (isFinished) return
                 val first = (rv.layoutManager as AIOLayoutManager).findFirstVisibleItemPosition()
                 if (first == -1) return
-                val newCount = recent.unreadCntCached - CurrentMsgList.msgList.value.size + first
-                if (newCount < count) {
-                    count = newCount
-                    lastUnreadMsg = CurrentMsgList.msgList.value.getOrNull(first)
-                    if (count > 0) {
-                        tv.text = format(count)
-                    } else {
-                        isFinished = true
-                        tv.visibility = View.GONE
+                val list = CurrentMsgList.msgList.value
+                var dirty = false
+
+                // Pop important stops that have scrolled into view. The list is in ascending-seq order
+                // (higher index = newer = bottom), so the top-of-viewport seq descends as you scroll
+                // up; a stop is visible once that seq has reached (≤) the stop's own seq.
+                val firstSeq = list.getOrNull(first)?.d?.msgSeq
+                if (firstSeq != null) {
+                    while (true) {
+                        val h = head() ?: break
+                        if (h.seq != null && firstSeq <= h.seq) { points.removeFirst(); dirty = true } else break
                     }
                 }
+
+                // Always track the remaining unread (for the terminal stop), the original way.
+                val newCount = unreadTotal - list.size + first
+                if (newCount < count) {
+                    count = newCount
+                    lastUnreadMsg = list.getOrNull(first)
+                    dirty = true
+                }
+
+                val h = head()
+                if (h == null || (h.seq == null && count <= 0)) { hide(); return }
+                if (dirty) refreshLabel()
             }
         })
     }
 
     override fun onClick(v: View?) {
-        if (isClicked) return
+        if (isClicked || isFinished) return
+        val h = head() ?: return
         val list = CurrentMsgList.msgList.value
-        Utils.log("SkipAction click: count=$count lastUnreadMsg=${lastUnreadMsg != null} listSize=${list.size}")
+        Utils.log("SkipAction click: head=${h.label} seq=${h.seq} count=$count listSize=${list.size}")
 
-        val onProgress: (Int) -> Unit = { pct -> tv.text = "加载中 $pct%" }
+        val onProgress: (Int) -> Unit = { tv.text = "加载中…" }
         val onFail: () -> Unit = {
             Utils.toast(tv.context, "加载失败，请重试")
-            tv.text = format(count)
             isClicked = false
+            refreshLabel()
         }
         // Remember where we are now and show the back-down button so the user can return here.
         BubbleTextView.beginJumpUp()
-        when {
-            lastUnreadMsg != null -> {
-                isClicked = true
+        isClicked = true
+        if (h.seq != null) {
+            // Important stop: locate the exact message (paging up if needed) and smooth-scroll to it.
+            // The scroll listener pops it and advances to the next stop once it lands in view.
+            CurrentMsgList.findMsg(h.seq, onProgress, result = { msg ->
+                isClicked = false
+                if (msg == null) { onFail(); return@findMsg }
+                rv.smoothScrollToStart(CurrentMsgList.getMsgIndex(msg))
+            })
+        } else when {
+            // Terminal first-unread stop, jumped the count-based way (no single msgSeq).
+            lastUnreadMsg != null ->
                 CurrentMsgList.upwardMsg(CurrentMsgList.getMsgIndex(lastUnreadMsg!!), count, onProgress, onFail) {
-                    rv.scrollToPosition(it)
+                    isClicked = false
+                    rv.smoothScrollToStart(it)
                 }
-            }
-            // Not scrolled yet: jump straight to the first unread, measured from the latest message.
-            list.isNotEmpty() && count > 0 -> {
-                isClicked = true
+            list.isNotEmpty() && count > 0 ->
                 CurrentMsgList.upwardMsg(list.size - 1, count - 1, onProgress, onFail) {
-                    rv.scrollToPosition(it)
+                    isClicked = false
+                    rv.smoothScrollToStart(it)
                 }
-            }
+            else -> isClicked = false
         }
     }
 }

@@ -140,6 +140,10 @@ object Settings {
     val titlebarHeight = FloatPref("titlebarHeight", 16f)
     // When the titlebar name is too long, scroll it as marquee instead of truncating with "…".
     val titlebarMarquee = BooleanPref("titlebarMarquee", false)
+    // Step the "↑ X条新消息" jump chip through the important unread messages (@我/回复/新文件/新公告)
+    // one at a time, bottom→top, before the final jump to the first unread. Off = the chip jumps
+    // straight to the first unread as before.
+    val chatImportantJump = BooleanPref("chatImportantJump", true)
     // Master switch for the custom main-page navigation. On = replace the native page-indicator
     // strip with our rebuilt nav (all the options below apply). Off = leave the native nav as-is.
     val mainNavCustom = BooleanPref("mainNavCustom", true)
@@ -384,7 +388,7 @@ object Settings {
         inlineChatInput, fullInlineInput, inlineEmojiButton, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
         hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
-        floatUnreadInChat, titlebarHeight, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
+        floatUnreadInChat, titlebarHeight, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, textSizeScale, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,

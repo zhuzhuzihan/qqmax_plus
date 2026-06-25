@@ -363,6 +363,7 @@ class 设置页 : SettingsActivity() {
             switch("仅聊天页显示标题栏", "标题栏作为浮层叠在聊天列表上方，翻到聊天设置页时自动隐藏；关闭则叠在所有页之上(重进聊天页生效)", Settings.titlebarChatOnly)
             switch("标题栏显示未读数", "在富标题栏显示其它会话的未读数红标(重进聊天页生效)", Settings.titlebarShowUnread)
             switch("未读数浮在聊天左上角", "其它会话未读数红标浮在聊天页左上角而非标题栏内，无标题栏也可用(重进聊天页生效)", Settings.floatUnreadInChat)
+            switch("逐条跳转重要消息", "“↑X条新消息”按钮依次跳到 @我/回复/新文件/新公告 等重要消息(自下而上)，到达后自动切换下一条，最后停在第一条未读", Settings.chatImportantJump)
             switch("标题栏名称滚动", "标题栏名称过长时滚动显示，而非省略号截断(重进聊天页生效)", Settings.titlebarMarquee)
             slider("标题栏高度", "富标题栏高度(dp)，默认 16", Settings.titlebarHeight, min = 16f, max = 32f)
             slider("标题栏左右边距", "富标题栏与未读红标左右留出的空白(dp)，避免圆屏圆角裁切", Settings.titlebarSideMargin, min = 0f, max = 48f)

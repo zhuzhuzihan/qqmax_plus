@@ -37,6 +37,14 @@ private val eventTypeLabels = mapOf(
 )
 
 /**
+ * Short label for a single msgbox specific-event message: the kernel's ready-to-display
+ * `highlightDigest` when present, else a fallback keyed by [eventType] (see [eventTypeLabels]).
+ * Shared with the in-chat jump-point stepper (see SkipAction in 跳转第一条未读消息.kt).
+ */
+fun specificEventLabel(eventType: Int, digest: String?): String =
+    digest?.takeIf { it.isNotEmpty() } ?: eventTypeLabels[eventType] ?: "[新消息]"
+
+/**
  * Resolve the notify tag to show for a recent contact, or null for none.
  *
  * Primary signal: `originData.listOfSpecificEventTypeInfosInMsgBox` — the same authoritative,
