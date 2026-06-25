@@ -42,6 +42,13 @@ class M3ListItem(ctx: Context) : LinearLayout(ctx) {
         addView(textCol, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
     }
 
+    /** Compact density: smaller title/subtitle text + tighter vertical padding (opt-in, for dense settings lists). */
+    fun dense(): M3ListItem = apply {
+        titleView.textSize = 13f
+        subtitleView.textSize = 10f
+        setPadding(12.dp, 7.dp, 12.dp, 7.dp)
+    }
+
     fun title(text: CharSequence): M3ListItem = apply { titleView.text = text }
 
     fun subtitle(text: CharSequence?): M3ListItem = apply {

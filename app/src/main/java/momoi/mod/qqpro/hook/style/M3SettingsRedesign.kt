@@ -89,9 +89,9 @@ private fun harvestRow(card: View): HarvestedRow? {
             v is TextView && !v.text.isNullOrBlank() -> texts.add(v)
         }
     }
-    val title = texts.firstOrNull()?.text?.toString()?.trim().orEmpty()
+    val title = brandFix(texts.firstOrNull()?.text?.toString()?.trim().orEmpty())
     if (title.isEmpty()) return null
-    val subtitle = texts.getOrNull(1)?.text?.toString()?.trim()?.takeIf { it != title }
+    val subtitle = texts.getOrNull(1)?.text?.toString()?.trim()?.let(::brandFix)?.takeIf { it != title }
     return HarvestedRow(
         title = title,
         subtitle = subtitle,
@@ -100,6 +100,13 @@ private fun harvestRow(card: View): HarvestedRow? {
         destructive = isDestructive(title),
     )
 }
+
+/**
+ * The base app's resources still brand some settings entries as "QQPro" (baked into resources.arsc,
+ * which the mixin build can't recompile). Rewrite to "QQ Max" as titles are harvested so the M3 list
+ * matches the rest of the app's branding. Mirrors [SelfTabClearCredit] for the native self tab.
+ */
+private fun brandFix(text: String): String = text.replace("QQ Pro", "QQ Max").replace("QQPro", "QQ Max")
 
 private fun isDestructive(title: String): Boolean =
     listOf("清空", "清除", "删除", "退出", "注销", "登出", "解散").any { title.contains(it) }
@@ -149,17 +156,17 @@ private fun withAlpha(color: Int, alpha: Int): Int = (alpha shl 24) or (color an
 /** A bold section label above an M3 list. */
 private fun sectionLabel(ctx: Context, text: String): TextView = TextView(ctx).apply {
     this.text = text
-    textSize = 12f
+    textSize = 11f
     setTextColor(M3.onSurfaceVariant)
     typeface = Typeface.DEFAULT_BOLD
-    setPadding(16.dp, 16.dp, 16.dp, 8.dp)
+    setPadding(14.dp, 12.dp, 14.dp, 6.dp)
     layoutParams = LinearLayout.LayoutParams(FILL, WRAP)
 }
 
 private fun divider(ctx: Context): View = View(ctx).apply {
     setBackgroundColor(M3.outlineVariant)
     layoutParams = LinearLayout.LayoutParams(FILL, 1.dp).apply {
-        marginStart = 60.dp; marginEnd = 8.dp
+        marginStart = 54.dp; marginEnd = 8.dp
     }
 }
 
@@ -188,14 +195,14 @@ private fun newListCard(ctx: Context): M3Card = M3Card(ctx).contentPadding(4.dp)
 
 /** Build one M3 list row (leading icon disc + title/subtitle + trailing switch or chevron). */
 private fun buildItem(ctx: Context, row: HarvestedRow, afterClick: (() -> Unit)? = null): View {
-    val item = M3ListItem(ctx).title(row.title)
+    val item = M3ListItem(ctx).dense().title(row.title)
     row.subtitle?.let { item.subtitle(it) }
 
     val fg = if (row.destructive) M3.error else M3.primary
     val bg = withAlpha(if (row.destructive) M3.error else M3.primary, 0x33)
     val path = iconPathForTitle(row.title) ?: MaterialSymbols.tune
     val disc = ImageView(ctx).apply { setImageDrawable(MaterialSymbol.circled(path, fg, bg)) }
-    item.leading(disc, 36)
+    item.leading(disc, 30)
 
     val click = { row.click(); afterClick?.invoke(); Unit }
     val native = row.nativeSwitch
@@ -217,7 +224,7 @@ private fun buildItem(ctx: Context, row: HarvestedRow, afterClick: (() -> Unit)?
             item.setOnClickListener { sw.toggle() }
         }
         else -> {
-            item.trailing(symbolImage(ctx, MaterialSymbols.chevron_right, M3.onSurfaceVariant, 20))
+            item.trailing(symbolImage(ctx, MaterialSymbols.chevron_right, M3.onSurfaceVariant, 18))
             item.setOnClickListener { click() }
         }
     }
@@ -292,11 +299,11 @@ private fun frameOver(ctx: Context, nativeRoot: View, scroll: View): View = Fram
 /** A centered bold page-title header. */
 private fun titleHeader(ctx: Context, title: String): TextView = TextView(ctx).apply {
     text = title
-    textSize = 18f
+    textSize = 16f
     setTextColor(M3.onSurface)
     typeface = Typeface.DEFAULT_BOLD
     gravity = Gravity.CENTER
-    setPadding(16.dp, 8.dp, 16.dp, 16.dp)
+    setPadding(16.dp, 6.dp, 16.dp, 12.dp)
     layoutParams = LinearLayout.LayoutParams(FILL, WRAP)
 }
 
@@ -340,7 +347,7 @@ fun rebuildSelfPage(nativeRoot: View): View? = runCatching {
  * profile header), then the 性别/生日 block full width below. Reparents the live native views.
  */
 private fun buildSelfHeader(ctx: Context, nativeRoot: View): View {
-    val card = M3Card(ctx).contentPadding(16.dp).apply {
+    val card = M3Card(ctx).contentPadding(12.dp).apply {
         layoutParams = LinearLayout.LayoutParams(FILL, WRAP).apply {
             marginStart = 4.dp; marginEnd = 4.dp; topMargin = 4.dp; bottomMargin = 4.dp
         }
@@ -354,7 +361,7 @@ private fun buildSelfHeader(ctx: Context, nativeRoot: View): View {
     }
     nativeRoot.byIdName("self_avatar")?.let { avatar ->
         detach(avatar)
-        row.addView(avatar, LinearLayout.LayoutParams(56.dp, 56.dp).apply { marginEnd = 14.dp })
+        row.addView(avatar, LinearLayout.LayoutParams(48.dp, 48.dp).apply { marginEnd = 12.dp })
     }
     val textCol = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
@@ -366,8 +373,8 @@ private fun buildSelfHeader(ctx: Context, nativeRoot: View): View {
         // `as? TextView` recolor silently no-ops and the name keeps its native color (invisible in
         // some themes). Handle both, mirroring buildSettingFrameHeader.
         when (name) {
-            is SingleLineTextView -> { name.setTextSize(17f); name.setTextColor(M3.onSurface); name.keepEmojiFitToText() }
-            is TextView -> name.apply { textSize = 17f; setTextColor(M3.onSurface); gravity = Gravity.START }
+            is SingleLineTextView -> { name.setTextSize(16f); name.setTextColor(M3.onSurface); name.keepEmojiFitToText() }
+            is TextView -> name.apply { textSize = 16f; setTextColor(M3.onSurface); gravity = Gravity.START }
         }
         textCol.addView(name, LinearLayout.LayoutParams(FILL, WRAP))
     }
@@ -528,7 +535,7 @@ fun rebuildSettingFrame(nativeScroll: View): View? = runCatching {
 
 /** Header card for the chat settings panel: reparents the live avatar / nick / QQ-number / info views. */
 private fun buildSettingFrameHeader(ctx: Context, avatar: View?, nick: View?, peerId: View?, info: View?): View {
-    val card = M3Card(ctx).contentPadding(16.dp).apply {
+    val card = M3Card(ctx).contentPadding(12.dp).apply {
         gravity = Gravity.CENTER_HORIZONTAL
         layoutParams = LinearLayout.LayoutParams(FILL, WRAP).apply {
             marginStart = 4.dp; marginEnd = 4.dp; topMargin = 4.dp; bottomMargin = 4.dp
@@ -536,7 +543,7 @@ private fun buildSettingFrameHeader(ctx: Context, avatar: View?, nick: View?, pe
     }
     avatar?.let {
         detach(it)
-        card.addView(it, LinearLayout.LayoutParams(64.dp, 64.dp).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        card.addView(it, LinearLayout.LayoutParams(56.dp, 56.dp).apply { gravity = Gravity.CENTER_HORIZONTAL })
     }
     nick?.let {
         detach(it)
@@ -545,16 +552,16 @@ private fun buildSettingFrameHeader(ctx: Context, avatar: View?, nick: View?, pe
         // is usually QQ's SingleLineTextView (a plain View, NOT a TextView), so handle both.
         when (it) {
             is SingleLineTextView -> {
-                it.setTextSize(16f); it.setTextColor(M3.onSurface)
+                it.setTextSize(15f); it.setTextColor(M3.onSurface)
                 it.keepEmojiFitToText()
             }
             is TextView -> it.apply {
-                textSize = 16f; setTextColor(M3.onSurface); gravity = Gravity.CENTER
+                textSize = 15f; setTextColor(M3.onSurface); gravity = Gravity.CENTER
                 keepEmojiFitToText()
             }
         }
         card.addView(it, LinearLayout.LayoutParams(FILL, WRAP).apply {
-            topMargin = 10.dp; gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = 8.dp; gravity = Gravity.CENTER_HORIZONTAL
         })
     }
     peerId?.let {
