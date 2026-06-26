@@ -111,8 +111,15 @@ object QzoneActions {
         val items = ArrayList<MediaItem>()
         runCatching {
             t.pictureInfo?.pics?.forEach { pi ->
-                val url = (pi.bigUrl ?: pi.currentUrl)?.url
-                if (!url.isNullOrEmpty()) items.add(MediaItem(imageUrl = url, imageLocalPath = null, videoUrl = null))
+                // Preview (feed card) uses the SMALLER currentUrl so it downloads fast and a GIF plays at
+                // low res; fullscreen uses the full originUrl. Each falls back through the variants.
+                val small = pi.currentUrl?.url?.takeIf { it.isNotEmpty() }
+                    ?: pi.bigUrl?.url?.takeIf { it.isNotEmpty() }
+                    ?: pi.originUrl?.url?.takeIf { it.isNotEmpty() }
+                val full = pi.originUrl?.url?.takeIf { it.isNotEmpty() }
+                    ?: pi.bigUrl?.url?.takeIf { it.isNotEmpty() }
+                    ?: pi.currentUrl?.url?.takeIf { it.isNotEmpty() }
+                if (!small.isNullOrEmpty()) items.add(MediaItem(imageUrl = small, imageLocalPath = null, videoUrl = null, fullUrl = full))
             }
         }
         runCatching {
@@ -225,8 +232,8 @@ object QzoneActions {
         val ts = System.currentTimeMillis()
         items.forEachIndexed { i, item ->
             val isVideo = item.videoUrl != null
-            val url = item.videoUrl ?: item.imageUrl
-            val ext = if (isVideo) "mp4" else "jpg"
+            // Save the FULL-resolution source (the feed preview used the smaller currentUrl).
+            val url = item.videoUrl ?: item.fullUrl ?: item.imageUrl
             val finish = {
                 if (remaining.decrementAndGet() == 0) {
                     val n = okCount.get()
@@ -234,12 +241,15 @@ object QzoneActions {
                 }
             }
             if (url.isNullOrEmpty()) { finish(); return@forEachIndexed }
-            val tmp = File(cache, "qzdl_${ts}_$i.$ext")
+            val tmp = File(cache, "qzdl_${ts}_$i.bin")
             runCatching {
                 download(url, tmp) { success ->
+                    // Save with the file's REAL type — sniffed from the downloaded bytes — not a hard-coded
+                    // .jpg/image/jpeg. A GIF saved as JPEG shows static in the gallery (the "not animated"
+                    // bug); detecting image/gif keeps it animated.
+                    val (ext, mime) = if (isVideo) "mp4" to "video/mp4" else MediaSave.imageTypeOf(tmp)
                     val saved = success && MediaSave.toGallery(
-                        ctx, tmp, "QZone_${ts}_$i.$ext",
-                        if (isVideo) "video/mp4" else "image/jpeg", isVideo,
+                        ctx, tmp, "QZone_${ts}_$i.$ext", mime, isVideo,
                     )
                     if (saved) okCount.incrementAndGet()
                     runCatching { tmp.delete() }

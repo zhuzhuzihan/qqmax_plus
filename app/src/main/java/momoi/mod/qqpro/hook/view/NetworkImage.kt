@@ -46,21 +46,26 @@ fun ImageView.loadPicUrl(
     val finish = { ok: Boolean -> onDone?.let { cb -> post { cb(ok) } } }
     if (cacheFile.exists()) {
         Utils.log("Load Image from disk ${cacheFile.path}")
-        bitmapDecodeFile(cacheFile)
-        finish(true)
+        // finish (→ onDone) fires only once the drawable is actually applied — the GIF path defers the
+        // setImageDrawable to doOnLayout, so calling onDone before that left a gap (spinner hidden but
+        // image not yet shown).
+        bitmapDecodeFile(cacheFile, onApplied = { finish(true) })
     } else {
         Utils.log("Loading image (downloading): $url -> ${cacheFile.path}")
         download(
             url, cacheFile,
             onProgress = { p -> onProgress?.let { cb -> post { cb(p) } } },
         ) { succeed ->
+            // The download callback runs on the downloadExecutor (a BACKGROUND thread). Decoding touches
+            // the view (setImageDrawable / doOnLayout / ImageDecoder), which MUST happen on the UI thread —
+            // the GIF/animated path otherwise throws "Only the original thread that created a view hierarchy
+            // can touch its views" and the image never shows. Marshal back to the view's UI thread.
             if (succeed) {
                 Utils.log("Downloaded image, decoding ${cacheFile.path}")
-                bitmapDecodeFile(cacheFile)
-                finish(true)
+                post { bitmapDecodeFile(cacheFile, onApplied = { finish(true) }) }
             } else {
                 Utils.log("Download Image Failed (callback): $url")
-                loadErrorImage()
+                post { loadErrorImage() }
                 finish(false)
             }
         }

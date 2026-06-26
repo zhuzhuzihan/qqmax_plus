@@ -16,6 +16,27 @@ import java.io.File
  */
 object MediaSave {
 
+    /**
+     * Sniff an image file's real format from its magic bytes → (extension, mime). A downloaded GIF must
+     * be saved as image/gif (not image/jpeg) or the gallery renders it as a single static frame. Defaults
+     * to jpg for anything unrecognized.
+     */
+    fun imageTypeOf(file: File): Pair<String, String> = runCatching {
+        file.inputStream().use { s ->
+            val h = ByteArray(12)
+            val n = s.read(h)
+            fun c(i: Int, ch: Char) = n > i && h[i] == ch.code.toByte()
+            fun u(i: Int, v: Int) = n > i && (h[i].toInt() and 0xFF) == v
+            when {
+                c(0, 'G') && c(1, 'I') && c(2, 'F') -> "gif" to "image/gif"
+                c(0, 'R') && c(1, 'I') && c(2, 'F') && c(3, 'F') &&
+                    c(8, 'W') && c(9, 'E') && c(10, 'B') && c(11, 'P') -> "webp" to "image/webp"
+                u(0, 0x89) && c(1, 'P') && c(2, 'N') && c(3, 'G') -> "png" to "image/png"
+                else -> "jpg" to "image/jpeg"
+            }
+        }
+    }.getOrDefault("jpg" to "image/jpeg")
+
     fun toGallery(ctx: Context, src: File, displayName: String, mime: String, isVideo: Boolean): Boolean {
         if (!src.exists() || src.length() == 0L) return false
         return runCatching {

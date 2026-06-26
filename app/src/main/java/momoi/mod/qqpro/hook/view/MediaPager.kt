@@ -31,6 +31,9 @@ class MediaItem(
     val imageUrl: String?,
     val imageLocalPath: String?,
     val videoUrl: String?,
+    // Full-resolution URL for the fullscreen viewer. The feed/grid preview uses the smaller [imageUrl]
+    // (faster, lighter); fullscreen loads this. Null → fall back to [imageUrl].
+    val fullUrl: String? = null,
 )
 
 /**
@@ -160,14 +163,16 @@ object MediaPager {
             if (localFile != null) {
                 h.spinner.visibility = View.GONE
                 h.image.bitmapDecodeFile(localFile)
-            } else if (!item.imageUrl.isNullOrEmpty()) {
+            } else if (!(item.fullUrl ?: item.imageUrl).isNullOrEmpty()) {
+                // Fullscreen loads the FULL-resolution URL (feed preview used the smaller one).
+                val fullSrc = item.fullUrl ?: item.imageUrl!!
                 h.spinner.indeterminate = true
                 h.spinner.visibility = View.VISIBLE
                 h.image.loadPicUrl(
-                    item.imageUrl,
+                    fullSrc,
                     // Stable, URL-derived cache name so swiping back hits the disk cache instead of
                     // re-downloading every bind (the default name is time-based → never cached).
-                    cacheFileName = "qzmedia_${item.imageUrl.hashCode()}",
+                    cacheFileName = "qzmedia_${fullSrc.hashCode()}",
                     onDone = { h.spinner.visibility = View.GONE },
                     onProgress = { p -> h.spinner.indeterminate = false; h.spinner.progress = p },
                 )

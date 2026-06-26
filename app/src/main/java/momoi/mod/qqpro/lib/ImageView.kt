@@ -51,7 +51,7 @@ private fun File.isAnimatableImage(): Boolean = try {
     false
 }
 
-fun ImageView.bitmapDecodeFile(file: File) {
+fun ImageView.bitmapDecodeFile(file: File, onApplied: (() -> Unit)? = null) {
     // Animated GIFs/WebP must be decoded into an AnimatedImageDrawable, otherwise BitmapFactory
     // only yields the first static frame (no animation). API 28+ has ImageDecoder.
     val animatable = file.isAnimatableImage()
@@ -86,6 +86,7 @@ fun ImageView.bitmapDecodeFile(file: File) {
                 setImageDrawable(drawable)
                 if (drawable is AnimatedImageDrawable) drawable.start()
                 Utils.log("bitmapDecodeFile GIF applied: intrinsic=${drawable.intrinsicWidth}x${drawable.intrinsicHeight} view=${width}x${height}")
+                onApplied?.invoke() // fire only once the drawable is actually on screen (deferred for GIFs)
             }
             return
         } catch (e: Exception) {
@@ -99,6 +100,7 @@ fun ImageView.bitmapDecodeFile(file: File) {
         s!!
     }
     s?.close()
+    onApplied?.invoke() // static decode is synchronous — the bitmap is set by now
 }
 
 fun ImageView.bitmapDecodeAssets(path: String) =

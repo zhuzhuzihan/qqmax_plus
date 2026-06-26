@@ -35,6 +35,7 @@ import momoi.mod.qqpro.hook.openProfileByUin
 import momoi.mod.qqpro.hook.openUserQzone
 import momoi.mod.qqpro.lib.dp
 import momoi.mod.qqpro.lib.material.M3
+import momoi.mod.qqpro.lib.material.M3Progress
 import momoi.mod.qqpro.lib.material.MaterialSymbols
 import momoi.mod.qqpro.lib.material.leadingSymbol
 import momoi.mod.qqpro.lib.material.symbolImage
@@ -286,6 +287,8 @@ object QzoneFeedCard {
             if (!parsed.isNullOrBlank()) {
                 bodyTv.text = parsed
                 card.addView(buildBody(ctx, bodyTv), LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = 8.dp })
+            } else {
+                dumpEmptyBody(data)
             }
         } else {
             card.addView(bodyTv, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = 8.dp })
@@ -424,6 +427,64 @@ object QzoneFeedCard {
             }
         }
         return linked
+    }
+
+    /** Reflectively read CellTitleInfo.title/displayTitle (field name unknown at compile time). */
+    private fun titleOf(d: BusinessFeedData?): String? = runCatching {
+        val cti = d?.javaClass?.getField("cellTitleInfo")?.get(d) ?: return null
+        val t = runCatching { cti.javaClass.getField("title").get(cti) as? String }.getOrNull()
+        val dt = runCatching { cti.javaClass.getField("displayTitle").get(cti) as? String }.getOrNull()
+        "title='$t' disp='$dt'"
+    }.getOrNull()
+
+    /**
+     * A feed rendered with NO body text. Dump every candidate text field so we can find where the
+     * content actually lives for this post type (e.g. cellTitleInfo vs cellSummaryV2, or an unloaded
+     * originalInfo) and add the right fallback in parsedBody.
+     */
+    private fun dumpEmptyBody(data: BusinessFeedData) {
+        runCatching {
+            val fk = runCatching { data.feedCommInfo?.feedskey }.getOrNull()
+            val sumV2 = runCatching { data.cellSummaryV2?.summary }.getOrNull()
+            val orig = runCatching { data.originalInfo }.getOrNull()
+            val origSum = runCatching { orig?.cellSummaryV2?.summary }.getOrNull()
+            Utils.log("QzoneEmptyBody fk=$fk sumV2='$sumV2' ${titleOf(data)} orig=${orig != null} origSum='$origSum' origTitle=${titleOf(orig)}")
+            // Genuinely empty (no summary OR original summary) — enumerate EVERY non-empty String we can
+            // reach so we find where this post type actually stores its text.
+            if (sumV2.isNullOrEmpty() && origSum.isNullOrEmpty()) {
+                Utils.log("QzoneEmptyBody.deep[data]: ${probeStrings(data)}")
+                if (orig != null) Utils.log("QzoneEmptyBody.deep[orig]: ${probeStrings(orig)}")
+            }
+        }
+    }
+
+    /** Reflectively collect "field=value" for every non-empty String on [obj] and one level into its
+     *  `cell*` sub-objects, so a hidden text field surfaces in the log. */
+    private fun probeStrings(obj: Any?): String {
+        obj ?: return "null"
+        val out = StringBuilder()
+        runCatching {
+            for (f in obj.javaClass.fields + obj.javaClass.declaredFields) {
+                runCatching {
+                    f.isAccessible = true
+                    val v = f.get(obj) ?: return@runCatching
+                    when {
+                        v is String && v.isNotBlank() -> out.append("${f.name}='${v.take(50)}' ")
+                        v is CharSequence && v.isNotBlank() -> out.append("${f.name}~='${v.toString().take(50)}' ")
+                        f.name.startsWith("cell") -> {
+                            // one level: pull a 'summary'/'title'/'content' string off the sub-object
+                            for (sub in arrayOf("summary", "title", "displayTitle", "content", "text")) {
+                                runCatching {
+                                    val sv = v.javaClass.getField(sub).get(v) as? String
+                                    if (!sv.isNullOrBlank()) out.append("${f.name}.$sub='${sv.take(50)}' ")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return out.toString().ifEmpty { "(no non-empty strings)" }
     }
 
     /** Dump candidate forward/repost fields so we can discover whether reposter data is available. */
@@ -569,11 +630,22 @@ object QzoneFeedCard {
                 outlineProvider = roundOutline(M3.radiusMd)
             }
             val cover = media[0].imageUrl
-            // Provisional height until the bitmap loads, then clamp to the real (bounded) aspect.
-            runCatching {
-                iv.loadPicUrl(cover, "qzm_${cover.hashCode()}", onDone = { ok -> if (ok) iv.post { clampSingleAspect(iv) } })
-            }
             frame.addView(iv, FrameLayout.LayoutParams(MATCH, WRAP, Gravity.CENTER))
+            // Provisional height while loading: the ImageView is WRAP and has no drawable yet, so without
+            // this the cell collapses to 0px and the spinner (match-parent of a 0-height frame) is
+            // invisible. Cleared on completion; clampSingleAspect then sets the real aspect height.
+            if (!cover.isNullOrEmpty()) {
+                frame.minimumHeight = 160.dp
+                // Show a centered spinner while the (possibly large/GIF) image downloads.
+                M3Progress.show(frame, 28, color = M3.primary)
+            }
+            runCatching {
+                iv.loadPicUrl(cover, "qzm_${cover.hashCode()}", onDone = { ok ->
+                    M3Progress.hide(frame)
+                    frame.minimumHeight = 0
+                    if (ok) iv.post { clampSingleAspect(iv) }
+                })
+            }
             frame.isClickable = true
             frame.setOnClickListener { QzoneActions.openMedia(host, data, 0) }
             return frame
@@ -636,8 +708,11 @@ object QzoneFeedCard {
             scaleType = ImageView.ScaleType.CENTER_CROP
             maxHeight = 400.dp
         }
-        runCatching { iv.loadPicUrl(url, "qzm_${url.hashCode()}") }
         cell.addView(iv, FrameLayout.LayoutParams(MATCH, MATCH))
+        // Spinner while the thumbnail downloads (hidden on completion), so a slow/large image isn't a
+        // blank box with no feedback.
+        if (!url.isNullOrEmpty()) M3Progress.show(cell, 20, color = M3.primary)
+        runCatching { iv.loadPicUrl(url, "qzm_${url.hashCode()}", onDone = { M3Progress.hide(cell) }) }
         return cell
     }
 
