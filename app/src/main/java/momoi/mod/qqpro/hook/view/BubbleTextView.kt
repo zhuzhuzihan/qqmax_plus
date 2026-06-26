@@ -167,10 +167,18 @@ class BubbleTextView(context: Context) : TextView(context) {
     private fun hasUnread(): Boolean = nativeWantsShow && isCountMode
 
     /**
-     * Drop anchors that have been REACHED (on screen) or are no longer in the list. An anchor is only
-     * eligible once ARMED (now >= armAt): at the instant of [beginJumpUp] the anchor is the top-visible
-     * row, so it's trivially "visible" before the jump even scrolls — arming defers the visibility
-     * check past the jump so we don't prune it the moment we add it. Returns true if any went.
+     * Drop anchors that have been REACHED or are no longer in the list. "Reached" is movement-driven:
+     *  - gone: the anchor message is no longer loaded in the list.
+     *  - returned: the jump carried it off-screen ([hasLeftViewport]) and it is now visible again
+     *    (the user scrolled/tapped back down to it).
+     *  - no-op jump (fallback): the jump never moved the list ([sawScroll] still false) yet the anchor
+     *    has stayed visible past [NO_SCROLL_SETTLE_MS] — the target was already on screen, so there is
+     *    nothing to return from. The long settle guards against a DEFERRED jump (chat search switches
+     *    pages then rv.post's the scroll ~700ms later) being mistaken for a no-op before it scrolls —
+     *    the old fixed 600ms arm pruned the still-visible anchor first and hid the down button.
+     *
+     * A still-visible anchor that has neither left the viewport nor seen a scroll is kept: the jump is
+     * pending. Returns true if any went.
      */
     private fun pruneAnchors(): Boolean {
         if (anchors.isEmpty()) return false
@@ -180,7 +188,9 @@ class BubbleTextView(context: Context) : TextView(context) {
         while (it.hasNext()) {
             val a = it.next()
             if (liveIndexOfMsgId(a.msgId) < 0) { it.remove(); continue }
-            if (now >= a.armAt && isMsgIdVisible(a.msgId)) it.remove()
+            if (!isMsgIdVisible(a.msgId)) { a.hasLeftViewport = true; continue }
+            val noOpJump = !a.sawScroll && now - a.addedAt >= NO_SCROLL_SETTLE_MS
+            if (a.hasLeftViewport || noOpJump) it.remove()
         }
         val removed = anchors.size != before
         if (removed) Utils.log("BubbleTextView.pruneAnchors: $before -> ${anchors.size} (reached/gone)")
@@ -239,8 +249,9 @@ class BubbleTextView(context: Context) : TextView(context) {
             val idx = liveIndexOfMsgId(target.msgId)
             if (idx >= 0) {
                 // Scroll back to the most recent anchor; it's pruned by refresh() once it's on screen.
-                // Force-arm it so the scroll-in actually prunes it (a fresh re-jump may still be unarmed).
-                target.armAt = 0L
+                // Mark it as having left the viewport so the scroll-in counts as "returned" and prunes
+                // it even if it was a fresh re-jump that never actually went off-screen.
+                target.hasLeftViewport = true
                 rv()?.smoothScrollToStart(idx)
                 Utils.log("BubbleTextView: returning to anchor msgId=${target.msgId} idx=$idx")
                 return
@@ -297,6 +308,9 @@ class BubbleTextView(context: Context) : TextView(context) {
         resolvedRv = rv
         val sl = object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                // Record that the list actually moved, so pruneAnchors can tell a jump that has scrolled
+                // (anchor genuinely reached / a no-op tiny jump) from a deferred jump that hasn't run yet.
+                if (kotlin.math.abs(dy) > 4 && anchors.isNotEmpty()) anchors.forEach { it.sawScroll = true }
                 val nd = if (dy > 4) 1 else if (dy < -4) -1 else lastScrollDir
                 if (nd != lastScrollDir) {
                     Utils.log("BubbleTextView.onScrolled: dy=$dy dir=$lastScrollDir->$nd dist=${distanceToLast()} last=${lm()?.findLastVisibleItemPosition()} count=${msgCount()}")
@@ -319,14 +333,29 @@ class BubbleTextView(context: Context) : TextView(context) {
 
     companion object {
         private const val SCROLL_DIST_THRESHOLD = 3
-        // How long after a jump before its anchor may be pruned. Covers the jump's smooth-scroll so we
-        // don't prune the anchor while it's still the (pre-jump) top-visible row.
-        private const val ARM_DELAY_MS = 600L
+        // Fallback only: if a jump NEVER scrolls the list (target was already fully on screen) the
+        // anchor can't be detected as reached by movement, so drop it once this much time has passed
+        // with the anchor still visible and no scroll seen. Must be longer than any jump's dispatch
+        // latency (page switch + rv.post for the chat-search jump is ~700ms) so a deferred jump that
+        // simply hasn't scrolled YET is never mistaken for a no-op jump. See [pruneAnchors].
+        private const val NO_SCROLL_SETTLE_MS = 2500L
 
         private var current: BubbleTextView? = null
 
-        /** A return point: the message we jumped from, prunable only once [armAt] has passed. */
-        private class Anchor(val msgId: Long, var armAt: Long)
+        /**
+         * A return point: the message we jumped from.
+         *
+         * Pruning is movement-driven, NOT wall-clock-driven (a fixed timer mis-fired on the deferred
+         * chat-search jump, which scrolls ~700ms after the anchor is added — the timer pruned the
+         * still-visible anchor before the jump had moved, hiding the down button). [sawScroll] records
+         * that the list actually scrolled after this anchor was added; [hasLeftViewport] records that
+         * the jump carried the anchor off-screen at least once. An anchor counts as "reached" only once
+         * it has left and come back into view.
+         */
+        private class Anchor(val msgId: Long, val addedAt: Long) {
+            var sawScroll = false
+            var hasLeftViewport = false
+        }
 
         // Outstanding programmatic upward jumps, oldest-first. Removed when reached (see pruneAnchors).
         // Tapping returns to the most recent (last). Static so it survives a jump's detach/attach.
@@ -336,8 +365,8 @@ class BubbleTextView(context: Context) : TextView(context) {
         /**
          * Call right before a programmatic upward jump (reply source / jump-to-first-unread). Pushes
          * the top-most currently visible message as a return anchor and shows the button immediately.
-         * A delayed refresh re-checks once the anchor is armed so a tiny jump (anchor still on screen)
-         * is pruned promptly.
+         * A delayed refresh re-checks after the no-scroll settle window so a no-op jump (target already
+         * on screen, list never scrolls) is eventually pruned even without further scroll/layout events.
          */
         fun beginJumpUp() {
             val view = current
@@ -350,12 +379,12 @@ class BubbleTextView(context: Context) : TextView(context) {
             val id = item?.d?.msgId
             if (id != null) {
                 anchors.removeAll { it.msgId == id }    // de-dup: move to most-recent
-                anchors.add(Anchor(id, System.currentTimeMillis() + ARM_DELAY_MS))
+                anchors.add(Anchor(id, System.currentTimeMillis()))
                 while (anchors.size > MAX_ANCHORS) anchors.removeAt(0)
             }
             Utils.log("BubbleTextView beginJumpUp anchor pos=$pos id=$id anchors=${anchors.size}")
             view?.refresh()
-            view?.postDelayed({ view.refresh() }, ARM_DELAY_MS + 100)
+            view?.postDelayed({ view.refresh() }, NO_SCROLL_SETTLE_MS + 100)
         }
     }
 }
