@@ -55,6 +55,26 @@ abstract class ImagePlay : BaseWatchItemCell<WatchAIOMsgItem, View>() {
 /** Each tappable picture in this cell, paired with the PicElement + its MsgElement (for the kernel). */
 private class PicTarget(val cover: View, val pic: PicElement, val element: MsgElement)
 
+/**
+ * Which image the user last touched, so a long-press menu on a multi-image bubble can act on THAT
+ * image instead of always the first. A message with several picElements (a mixed/grouped image bubble)
+ * carries no "which one was pressed" info anywhere — even the native menu falls back to elements.first()
+ * — so we record the cover under the finger on ACTION_DOWN (the down that precedes the long-press) and
+ * the menu reads it back by msgId within a short window.
+ */
+object PressedImage {
+    private var msgId = 0L
+    private var element: MsgElement? = null
+    private var at = 0L
+    fun record(msgId: Long, element: MsgElement) {
+        this.msgId = msgId; this.element = element; this.at = android.os.SystemClock.uptimeMillis()
+    }
+    /** The MsgElement (carrying picElement) the user just pressed for [msgId], or null if none/stale. */
+    fun elementFor(msgId: Long): MsgElement? =
+        if (this.msgId == msgId && element != null &&
+            android.os.SystemClock.uptimeMillis() - at < 8000L) element else null
+}
+
 private fun bindPicClicks(view: View, item: WatchAIOMsgItem) {
     when (item) {
         // Standalone image message: the WatchPicGroupWidget is the cell's CONTENT widget (reached via
@@ -107,8 +127,17 @@ private fun collectPicViews(v: View, out: ArrayList<View>) {
     if (v is ViewGroup) for (i in 0 until v.childCount) collectPicViews(v.getChildAt(i), out)
 }
 
+@android.annotation.SuppressLint("ClickableViewAccessibility")
 private fun attachPicClick(target: PicTarget, cellItem: WatchAIOMsgItem) {
     target.cover.setOnClickListener { v -> handlePicClick(target, cellItem, v) }
+    // Record this image as "pressed" on the down that precedes a long-press, so the long-press menu's
+    // save/copy/收藏 act on the image actually pressed (not elements.first()). Returns false so the
+    // tap (click) and the bubble's long-press interceptor still work.
+    target.cover.setOnTouchListener { _, ev ->
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN)
+            PressedImage.record(cellItem.d.msgId, target.element)
+        false
+    }
 }
 
 private fun handlePicClick(target: PicTarget, cellItem: WatchAIOMsgItem, v: View) {

@@ -188,6 +188,11 @@ object LongPressMenu {
                 it.faceBubbleElement != null
         } == true
         val hasPic = msg?.elements?.any { it.picElement != null } == true
+        // For a multi-image bubble, resolve the image the user actually long-pressed (ImagePlay records
+        // it on touch); elements.first() — what native and our old code used — always grabbed image #1.
+        val pressedEl = msg?.let { momoi.mod.qqpro.hook.PressedImage.elementFor(it.msgId) }
+            ?.takeIf { it.picElement != null }
+        val picCount = msg?.elements?.count { it.picElement != null } ?: 0
         val mfFile: File? = msg?.takeIf { r -> r.elements?.any { it.marketFaceElement != null } == true }
             ?.let { MarketFaceImage.fileFor(it.msgId) }
         val hasShareableMedia = msg?.elements?.any {
@@ -211,7 +216,7 @@ object LongPressMenu {
             runCatching { PartialCopyFragment(copyText).show(fm, "qqpro_partial_copy") }
         }
         // 6 复制图片
-        if (hasPic && msg != null) add(6, "复制图片", MaterialSymbols.image) { host.copyImageToClipboard(msg, msgItem) }
+        if (hasPic && msg != null) add(6, "复制图片", MaterialSymbols.image) { host.copyImageToClipboard(msg, msgItem, pressedEl) }
         else if (mfFile != null) add(6, "复制图片", MaterialSymbols.image) { host.copyImageFileToClipboard(mfFile) }
         // 7 转发 (to other chats)
         if (msg != null && (fwdText != null || forwardable)) add(7, "转发", MaterialSymbols.forward) {
@@ -225,13 +230,18 @@ object LongPressMenu {
         else if (msg != null && (fwdText != null || hasShareableMedia)) add(9, "系统分享", MaterialSymbols.send) { host.shareMessage(msg, msgItem) }
         // 10 收藏 / 11 保存. Native dispatch (which shows its own toast) when the cell offers it;
         // otherwise our own for the in-bubble image / marketface that the native menu omits.
-        val picEl: PicElement? = msg?.elements?.firstNotNullOfOrNull { it.picElement }
+        val picEl: PicElement? = pressedEl?.picElement ?: msg?.elements?.firstNotNullOfOrNull { it.picElement }
+        // With several images in one bubble, native SavePic/SaveFavEmoji also fall back to image #1, so
+        // we must handle it ourselves with the pressed image. For a single image keep deferring to native.
+        val ownPicSave = picEl != null && picCount > 1
         when {
+            ownPicSave -> add(10, "收藏", MaterialSymbols.star) { withPicFile(host, picEl!!) { f -> doAddFavEmoji(host.context, f) } }
             "SaveFavEmoji" in names -> add(10, "收藏", MaterialSymbols.star, action = native("SaveFavEmoji"))
             picEl != null -> add(10, "收藏", MaterialSymbols.star) { withPicFile(host, picEl) { f -> doAddFavEmoji(host.context, f) } }
             mfFile != null -> add(10, "收藏", MaterialSymbols.star) { doAddFavEmoji(host.context, mfFile) }
         }
         when {
+            ownPicSave -> add(11, "保存", MaterialSymbols.download) { withPicFile(host, picEl!!) { f -> saveFileTo(host, f) } }
             "SavePic" in names -> add(11, "保存", MaterialSymbols.download, action = native("SavePic"))
             picEl != null -> add(11, "保存", MaterialSymbols.download) { withPicFile(host, picEl) { f -> saveFileTo(host, f) } }
             mfFile != null -> add(11, "保存", MaterialSymbols.download) { saveFileTo(host, mfFile) }

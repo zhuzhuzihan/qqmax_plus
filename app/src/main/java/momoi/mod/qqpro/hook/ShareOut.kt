@@ -94,9 +94,11 @@ fun View.shareMessage(msg: MsgRecord, msgItem: WatchAIOMsgItem?) {
  * download → HTTP), copies it into the FileProvider-shared dir, then puts a [ClipData.newUri] on the
  * clipboard. Blocking work runs off the UI thread.
  */
-fun View.copyImageToClipboard(msg: MsgRecord, msgItem: WatchAIOMsgItem?) {
+fun View.copyImageToClipboard(msg: MsgRecord, msgItem: WatchAIOMsgItem?, prefer: MsgElement? = null) {
     val ctx = context.applicationContext
-    val picEl = (msg.elements ?: emptyList()).firstOrNull { it.picElement != null }
+    // Use the specifically-pressed image (multi-image bubble) when given, else the first.
+    val picEl = prefer?.takeIf { it.picElement != null }
+        ?: (msg.elements ?: emptyList()).firstOrNull { it.picElement != null }
     if (picEl == null) {
         Utils.toast(context, "没有可复制的图片")
         return
