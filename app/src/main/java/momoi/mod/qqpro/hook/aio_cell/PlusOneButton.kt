@@ -82,6 +82,7 @@ object PlusOneButton {
     // Re-evaluate +1 against the current list, independent of cell binds. Used when the
     // list changes but the affected cell doesn't rebind (recall before the tail, etc.).
     private fun refresh() {
+        if (!momoi.mod.qqpro.Settings.plusOneButton.value) { detach(); return }
         val list = CurrentMsgList.msgList.value
         val idx = effectiveLastIndex(list)
         val text = if (idx >= 0) msgText(list[idx]) else null
@@ -107,6 +108,10 @@ object PlusOneButton {
     }
 
     fun bind(widget: AIOCellGroupWidget, item: WatchAIOMsgItem) {
+        if (!momoi.mod.qqpro.Settings.plusOneButton.value) {
+            if (attachedTo?.get() === widget) detach()
+            return
+        }
         ensureObserving()
         boundMsgId[widget] = item.d.msgId
 

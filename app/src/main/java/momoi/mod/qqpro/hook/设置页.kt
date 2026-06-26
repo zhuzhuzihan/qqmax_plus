@@ -318,12 +318,7 @@ class 设置页 : SettingsActivity() {
             switch("全员禁言隐藏输入栏", "群全员禁言且自己非群主/管理员时，隐藏底部输入栏，改为显示“全员禁言中”提示", Settings.muteHideInputBar)
             switch("图片随消息发送", "发送文字时一并发送已选图片", Settings.sendWithImage)
             switch("回复带艾特", "回复消息时自动艾特对方", Settings.replyWithAt)
-            slider("屏幕圆角直径", "在输入框左右各留出此宽度的空白，避免圆屏圆角裁切两侧按钮", Settings.screenCornerDiameter, min = 0f, max = 48f)
-            textInput("语音键文字", "聊天页语音键上显示的文字", Settings.voiceBtnText)
-        },
-        SettingsCategory("聊天显示", "缩放、气泡、图片与背景") {
-            slider("缩放倍数", "整体界面缩放，返回聊天页即时生效", Settings.scale)
-            slider("聊天文本缩放", "聊天气泡内文字大小", Settings.chatScale)
+            switch("气泡 +1 按钮", "最新一条与上一条内容相同时，在气泡上显示「+1」小按钮，点按可再次发送该内容；关闭则不显示", Settings.plusOneButton)
             // 双击消息的动作，三选一。底层仍是 double_speak / double_reply 两个开关(基座 app 读取)，
             // 这里把它们合并成一个下拉：无 / 回复 / 朗读。朗读优先于回复(两者都开时朗读生效)。
             selector("双击消息", "双击聊天消息时的动作", listOf("无", "回复", "朗读"),
@@ -337,6 +332,12 @@ class 设置页 : SettingsActivity() {
                 Settings.doubleSpeak.value = which == 2
                 Settings.doubleReply.value = which == 1
             }
+            slider("屏幕圆角直径", "在输入框左右各留出此宽度的空白，避免圆屏圆角裁切两侧按钮", Settings.screenCornerDiameter, min = 0f, max = 48f)
+            textInput("语音键文字", "聊天页语音键上显示的文字", Settings.voiceBtnText)
+        },
+        SettingsCategory("聊天显示", "缩放、气泡、图片与背景") {
+            slider("缩放倍数", "整体界面缩放，返回聊天页即时生效", Settings.scale)
+            slider("聊天文本缩放", "聊天气泡内文字大小", Settings.chatScale)
             slider("图片最大高度", "聊天图片最大显示高度(占屏幕高度比例)，默认 0.5", Settings.picMaxHeightRatio, min = 0.3f, max = 1f)
             slider("气泡圆角半径", "聊天气泡、合并转发/聊天记录块与回复块的圆角半径(dp)", Settings.bubbleCornerRadius, min = 0f, max = 24f)
             colorPicker("我的气泡颜色", "留空为材料色", Settings.bubbleColorSelf, MaterialColors.ACCENT,

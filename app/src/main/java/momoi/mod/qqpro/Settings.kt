@@ -62,6 +62,8 @@ object Settings {
     // Group chat avatar size, as a multiple of the nickname text size. Default 2.5x.
     val avatarSizeScale = FloatPref("avatarSizeScale", 2.5f)
     val hideRepeatedSender = BooleanPref("hideRepeatedSender", true)
+    // Show a "+1" pill on the latest message when it repeats the previous one (tap to send it again).
+    val plusOneButton = BooleanPref("plusOneButton", true)
     // Replace the group message sender NAME with our resolved 群名片/备注/昵称. Off by default:
     // keep the native sender name (the role/头衔 tag is appended either way — it's independent).
     val replaceGroupNick = BooleanPref("replaceGroupNick", false)
@@ -385,7 +387,7 @@ object Settings {
         themeColor, themeOnPrimary, themePrimaryContainer, themeOnPrimaryContainer,
         themeSurface, themeSurfaceContainer, themeSurfaceContainerHigh, themeSurfaceVariant,
         themeOnSurface, themeOnSurfaceVariant, themeOnSurfaceTip, themeHint, themeOutline, themeOutlineVariant, themeError, lightMode,
-        showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, replaceGroupNick, showMemberLevel, inlineSendButton,
+        showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, plusOneButton, replaceGroupNick, showMemberLevel, inlineSendButton,
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
         hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
