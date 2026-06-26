@@ -1,6 +1,5 @@
 package momoi.mod.qqpro.hook.style
 
-import android.util.TypedValue
 import android.view.View
 import android.widget.TextView
 import androidx.core.view.forEach
@@ -15,6 +14,7 @@ import me.jessyan.autosize.AutoSizeConfig
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Colors
 import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.applyChatTextSize
 import momoi.mod.qqpro.asGroupOrNull
 import momoi.mod.qqpro.util.Utils
 
@@ -66,7 +66,12 @@ abstract class 缩小文本 : BaseWatchItemCell<WatchAIOMsgItem, View>() {
             // displayMetrics at a stale density; using SP would then make chat text shrink until a
             // restart. Computing px from the config keeps the size correct regardless. (We must NOT
             // re-adapt the activity at runtime — that desyncs the conversation list RecyclerView.)
-            view.setTextSize(TypedValue.COMPLEX_UNIT_PX, chatTextPx(15f * Settings.chatScale.value))
+            //
+            // applyChatTextSize also scales inline face emoji by the SAME factor the text scaled from
+            // native, preserving QQ's native emoji-to-text ratio. (QQ bakes faces as fixed-size
+            // EmoticonSpans; their rescale was dropped with textSizeScale in 7ead873, so they mismatched
+            // the chatScale-sized text. A fixed absolute size instead clipped them — proportional fits.)
+            view.applyChatTextSize(chatTextPx(15f * Settings.chatScale.value))
         }
     }
 

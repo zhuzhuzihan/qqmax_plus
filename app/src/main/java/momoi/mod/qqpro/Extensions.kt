@@ -1,6 +1,7 @@
 package momoi.mod.qqpro
 
 import android.text.Spanned
+import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewParent
@@ -14,6 +15,7 @@ import momoi.mod.qqpro.lib.create
 import momoi.mod.qqpro.lib.vertical
 import java.io.File
 import java.lang.reflect.Method
+import java.util.WeakHashMap
 
 /**
  * QQ bakes inline face emoji as fixed-size [EmoticonSpan]s (sized to QQ's default chat text size),
@@ -39,6 +41,32 @@ fun fitEmojiSpans(cs: CharSequence?, textPx: Float, ratio: Float = 1.25f) {
     val target = (textPx * ratio).toInt()
     if (target <= 0) return
     cs.getSpans(0, cs.length, EmoticonSpan::class.java).forEach { it.h(target) }
+}
+
+// Native (pre-resize) sizes captured once so scaling is always computed from the ORIGINAL value and
+// never compounds across rebinds. Kept here (not in the @Mixin cell, which may not hold initialized
+// fields) and weak so recycled views / regenerated spans are collected.
+private val chatTextBasePx = WeakHashMap<TextView, Float>()
+private val chatEmojiBasePx = WeakHashMap<EmoticonSpan, Int>()
+
+/**
+ * Set a chat body [TextView]'s text size to [finalTextPx] AND scale its inline face emoji to match,
+ * by the SAME factor the text scaled from its native size (`finalTextPx / nativeTextPx`). This
+ * preserves QQ's native emoji-to-text ratio, so emoji track the text without being clipped — unlike a
+ * fixed absolute `textPx * k`, which can make a face taller than the line box and clip its top/bottom.
+ * Native text size and each span's native size are captured once (before the first resize); absolute
+ * and idempotent, so it's safe to call on every (re)bind.
+ */
+fun TextView.applyChatTextSize(finalTextPx: Float) {
+    if (finalTextPx <= 0f) return
+    val baseText = chatTextBasePx.getOrPut(this) { textSize } // native px, captured before we change it
+    setTextSize(TypedValue.COMPLEX_UNIT_PX, finalTextPx)
+    val ratio = if (baseText > 0f) finalTextPx / baseText else 1f
+    (text as? Spanned)?.getSpans(0, text.length, EmoticonSpan::class.java)?.forEach { span ->
+        val emBase = chatEmojiBasePx.getOrPut(span) { span.c }
+        val newSize = (emBase * ratio).toInt()
+        if (newSize > 0) span.h(newSize)
+    }
 }
 
 /** Resize this view's face spans to match its own text size, and keep doing so as the text changes. */
