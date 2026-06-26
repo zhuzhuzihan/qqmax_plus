@@ -6,13 +6,17 @@ import android.view.ViewGroup
 import com.tencent.aio.api.factory.IAIOFactory
 import com.tencent.aio.api.list.IDataSubmitApi
 import com.tencent.aio.api.list.IListUIOperationApi
+import com.tencent.aio.api.runtime.AIOContext
 import com.tencent.aio.base.chat.ChatPie
 import com.tencent.aio.base.mvi.part.MsgListUiState
 import com.tencent.aio.data.msglist.IMsgItem
 import com.tencent.aio.main.fragment.ChatFragment
+import com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.data.MsgListRepo
 import com.tencent.aio.part.root.panel.content.firstLevel.msglist.mvx.intent.MsgListDataIntent
+import com.tencent.watch.aio_impl.coreImpl.repo.WatchMsgListRepo
 import com.tencent.watch.aio_impl.coreImpl.vb.WatchAIOListVB
 import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
+import kotlinx.coroutines.CoroutineScope
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.lib.Observable
 import momoi.mod.qqpro.util.ThreadManager
@@ -302,6 +306,46 @@ object CurrentMsgList {
             // updated so they observe the new size.
             if (updateType and 4 != 0) topPageResult.update(updateType)
             super.n(list as MsgListUiState, uiHelper)
+        }
+    }
+
+    /**
+     * Disable the native 120-message sliding-window eviction.
+     *
+     * [WatchMsgListRepo.o] (repo init) sets the base [MsgListRepo] elimination cap to 120 — runtime
+     * field `MsgListRepo.d` (`msgLimitCnt`). Once the loaded list grows past it, the base repo trims on
+     * EVERY page load:
+     *   - loading OLDER (LoadPrePage): `subList(0, 120)` — keeps the OLDEST 120, DROPS the newest tail
+     *     ("msgElimination: delete N at foot").
+     *   - loading NEWER (LoadNextPage): keeps the newest 120, drops the head.
+     *
+     * So jumping more than ~120 messages up (reply-source jump, 跳转第一条未读, chat search) evicts the
+     * NEWEST messages from the repo's own list. [Hook.n] re-heals the RENDERED list from our accumulated
+     * [msgList] mirror, but the repo's [displayList] stays truncated — its lastOrNull() is now a mid-list
+     * message, so the next LoadNextPage (fired when you scroll back down) anchors on the wrong message and
+     * the newest messages stay missing until you re-enter the chat (which reloads a fresh first page).
+     * That is the "messages near the end disappear after a far jump" bug.
+     *
+     * Fix: after the original init, set the cap to DISABLE_ELIMINATION (-1). The base guards trimming with
+     * `size > i && i != DISABLE_ELIMINATION`, so -1 turns elimination off entirely. We already accumulate
+     * the whole list in [msgList] and hand it to the renderer, so the repo retaining it too costs nothing
+     * extra and just stops it from fighting the heal. The property has no surviving setter at runtime (R8
+     * inlined `o()`'s assignment to a direct iput), so we write the field reflectively to avoid a
+     * NoSuchMethod crash from a `setMsgLimitCnt` call. Re-applies on every chat (re)open since o() runs per
+     * repo init.
+     */
+    @Mixin
+    class NoEviction(context: AIOContext, scope: CoroutineScope) : WatchMsgListRepo(context, scope) {
+        override fun o() {
+            super.o() // original init (sets msgLimitCnt = 120, processors, name ability, …)
+            runCatching {
+                // Field `d` is declared on MsgListRepo (not the Watch/Compat subclasses, which may reuse
+                // the short name `d` for their own fields), so target that exact declaring class.
+                val f = MsgListRepo::class.java.getDeclaredField("d")
+                f.isAccessible = true
+                f.setInt(this, -1) // DISABLE_ELIMINATION
+                Utils.log("MsgList.NoEviction: msgLimitCnt -> -1 (sliding-window eviction disabled)")
+            }.onFailure { Utils.log("MsgList.NoEviction: failed to disable eviction: $it") }
         }
     }
 
