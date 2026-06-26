@@ -184,6 +184,24 @@ object AIOCell {
             p6: LifecycleOwner?
         ) {
             super.i(view, item, p3, p4, p5, p6)
+            // Universal per-bind diagnostic: log EVERY message as it binds, not just the
+            // WatchToQQView placeholder / text bubbles. Previously most cell types (pic, mix,
+            // ark, file, forward, markdown, …) emitted no log line at all, so messages appeared
+            // to "go missing" and couldn't be pinned. Element type + presence here identifies the
+            // exact kind of any message (incl. the ones that fall through to other cells).
+            runCatching {
+                val r = item.d
+                val els = runCatching { r.elements }.getOrNull().orEmpty()
+                val parts = els.joinToString(" | ") { e ->
+                    "${runCatching { e.elementType }.getOrNull()}:${elementContent(e)}"
+                }
+                Utils.log(
+                    "MsgBind item=${item.javaClass.simpleName} cell=${view.javaClass.simpleName} " +
+                        "msgType=${runCatching { r.msgType }.getOrNull()} sub=${runCatching { r.subMsgType }.getOrNull()} " +
+                        "sender=${runCatching { r.senderUid }.getOrNull()} seq=${runCatching { r.msgSeq }.getOrNull()} " +
+                        "els[${els.size}]=[$parts]"
+                )
+            }.onFailure { Utils.log("MsgBind dump failed: $it") }
             // Diagnostic for the orange "请在手机QQ查看" placeholder (WatchToQQViewMsgItem): dump what the
             // message actually carries, so we can tell whether the content is present client-side (some
             // typed element non-null → potentially renderable with a new cell hook) or the watch only
@@ -393,4 +411,30 @@ private fun elementPresence(e: Any): String = runCatching {
         .filter { it.name.endsWith("Element") }
         .mapNotNull { f -> runCatching { if (f.get(e) != null) f.name else null }.getOrNull() }
         .joinToString(",")
+}.getOrDefault("?")
+
+/**
+ * Full content dump of a message element: finds the non-null typed sub-element (textElement,
+ * picElement, arkElement, fileElement, multiForwardMsgElement, …) and dumps all of its scalar
+ * field values (String / ByteArray-decoded / number). Even when field names are R8-obfuscated,
+ * the VALUES expose the real text / JSON / file name / ark payload, so any message — incl. the
+ * ones that fall through to the "view on phone" placeholder — is fully identifiable from the log.
+ */
+private fun elementContent(e: Any): String = runCatching {
+    val typed = e.javaClass.fields
+        .filter { it.name.endsWith("Element") }
+        .firstNotNullOfOrNull { f -> runCatching { f.get(e) }.getOrNull()?.let { f.name to it } }
+        ?: return "?"
+    val (name, obj) = typed
+    val fields = obj.javaClass.fields.mapNotNull { f ->
+        val v = runCatching { f.get(obj) }.getOrNull() ?: return@mapNotNull null
+        val s = when (v) {
+            is CharSequence -> v.toString()
+            is ByteArray -> runCatching { String(v) }.getOrDefault("<${v.size}b>")
+            is Number, is Boolean, is Char -> v.toString()
+            else -> return@mapNotNull null
+        }.trim()
+        if (s.isEmpty() || s == "0" || s == "false") null else "${f.name}=${s.take(160)}"
+    }
+    "$name{${fields.joinToString(" ").take(500)}}"
 }.getOrDefault("?")
