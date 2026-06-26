@@ -490,8 +490,10 @@ class ChatSearchFragment : MyDialogFragment() {
             // back to the front, same as a photo/video send does (see WatchAIOPageReset / InputMethodFragmentHook).
             if (decor != null) switchToChatPage(decor)
             BubbleTextView.beginJumpUp()
-            // Instant jump — smoothScrollToStart animates item-by-item and crawls over long distances.
-            if (rv != null && index >= 0) rv.post { rv.scrollToStartInstant(index) }
+            // Distance-capped animated jump: teleports over the long unseen stretch then animates the
+            // final short hop, so far results land fast but still show a brief glide (not a crawl).
+            Utils.log("ChatSearch.jumpTo: rv=${System.identityHashCode(rv)} index=$index mirrorSize=${CurrentMsgList.msgList.value.size}")
+            if (rv != null && index >= 0) rv.post { rv.smoothScrollToStart(index) }
         }.onFailure { Utils.log("ChatSearch: jump failed: $it") }
     }
 

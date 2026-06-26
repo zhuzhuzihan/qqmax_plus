@@ -1,20 +1,54 @@
 package momoi.mod.qqpro.hook.view
 
+import android.util.DisplayMetrics
+import androidx.recyclerview.widget.AIOLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
-import momoi.mod.qqpro.hook.action.CurrentMsgList
+
+// How many rows of real animation a jump is allowed to play. Anything farther than this from the
+// current viewport is teleported to within this many rows of the target first, then the short hop is
+// animated — so the user always sees a quick glide into place instead of a long crawl over hundreds
+// of messages they can't perceive anyway.
+private const val JUMP_ANIM_MAX_ROWS = 8
+
+// Glide speed for jump animations (lower = faster). LinearSmoothScroller's default is 25f/inch, which
+// feels sluggish for a short hop; this is snappier while still reading as a scroll.
+private const val JUMP_SCROLL_MS_PER_INCH = 12f
 
 /**
- * Jump straight to [position] with the item snapped to the top, no animation. Used by chat
- * search where a far-off target makes [smoothScrollToStart]'s per-item animation take forever.
+ * Smooth-scroll so [position] snaps to the top. For far targets this teleports to within
+ * [JUMP_ANIM_MAX_ROWS] of the target (instantly, over the unseen stretch) and then animates only the
+ * final short hop — fast jump, but the user still sees a brief glide into the destination. Near
+ * targets animate the whole way.
+ *
+ * This is the ONLY scroll helper jump features need: every programmatic UP-jump (reply source,
+ * jump-to-first-unread, chat search, forward, nav) goes through it. Go-to-bottom is NOT here — it
+ * delegates to the native QQ JumpBottom click (see BubbleTextView.goToBottom), which loads the latest
+ * page and lands on the true visual bottom past the input-bar footer. A previous custom go-to-bottom
+ * glide oscillated forever at the bottom (canScrollVertically never reads false there because the footer
+ * sits below the newest message), so it was removed in favour of delegating to native.
  */
-fun RecyclerView.scrollToStartInstant(position: Int) {
-    (layoutManager as? LinearLayoutManager)?.scrollToPositionWithOffset(position, 0)
-        ?: scrollToPosition(position)
+fun RecyclerView.smoothScrollToStart(position: Int) {
+    val n = adapter?.itemCount ?: 0
+    if (n <= 0) return
+    val target = position.coerceIn(0, n - 1)
+    val first = firstVisiblePosition()
+    val last = lastVisiblePosition()
+    if (first >= 0 && last >= 0 &&
+        (target < first - JUMP_ANIM_MAX_ROWS || target > last + JUMP_ANIM_MAX_ROWS)
+    ) {
+        // Land JUMP_ANIM_MAX_ROWS short of the target on the side we're coming from, then animate in.
+        val pre = (if (target < first) target + JUMP_ANIM_MAX_ROWS else target - JUMP_ANIM_MAX_ROWS)
+            .coerceIn(0, n - 1)
+        scrollToPosition(pre)
+        post { startSnapToStart(target) }
+        return
+    }
+    startSnapToStart(target)
 }
 
-fun RecyclerView.smoothScrollToStart(position: Int) {
+private fun RecyclerView.startSnapToStart(position: Int) {
     layoutManager?.startSmoothScroll(
         object : LinearSmoothScroller(context) {
             init {
@@ -24,27 +58,58 @@ fun RecyclerView.smoothScrollToStart(position: Int) {
             override fun getVerticalSnapPreference(): Int {
                 return SNAP_TO_START
             }
+
+            override fun calculateSpeedPerPixel(displayMetrics: DisplayMetrics): Float {
+                return JUMP_SCROLL_MS_PER_INCH / displayMetrics.densityDpi
+            }
         })
 }
 
 /**
- * Force a continuous smooth scroll to the very bottom of the list. The native go-to-bottom (and
- * RecyclerView's own [LinearSmoothScroller]) does a fast "interim seek" over long distances that
- * jump-cuts and skips binding the messages in between. Instead we drive [scrollBy] a fixed amount
- * every animation frame until the list can no longer scroll down, so it stays a smooth, constant
- * speed scroll and every intermediate item is bound (loaded) on the way.
+ * Animated go-to-bottom: teleport to within [JUMP_ANIM_MAX_ROWS] of the last item (the footer, == the
+ * true visual bottom) then smooth-scroll the short remainder, snapping the footer to the viewport bottom.
+ * Uses the framework's [LinearSmoothScroller] (which targets a fixed position and self-terminates) — NOT
+ * a hand-rolled scrollBy loop, so it can't oscillate at the bottom the way the old custom glide did.
  */
-fun RecyclerView.smoothScrollToEnd(position: Int) {
-    // Cancel any in-flight smooth scroll (e.g. a previous tap) first.
-    stopScroll()
-    val step = (resources.displayMetrics.density * 48f).toInt().coerceAtLeast(1)
-    val runner = object : Runnable {
-        override fun run() {
-            // canScrollVertically(1) == false means we're at the real bottom.
-            if (!canScrollVertically(1)) return
-            scrollBy(0, step)
-            postOnAnimation(this)
-        }
+fun RecyclerView.smoothScrollToEnd() {
+    val n = adapter?.itemCount ?: 0
+    if (n <= 0) return
+    val target = n - 1
+    val last = lastVisiblePosition()
+    if (last in 0 until (target - JUMP_ANIM_MAX_ROWS)) {
+        scrollToPosition((target - JUMP_ANIM_MAX_ROWS).coerceIn(0, target))
+        post { startSnapToEnd(target) }
+    } else {
+        startSnapToEnd(target)
     }
-    postOnAnimation(runner)
 }
+
+private fun RecyclerView.startSnapToEnd(position: Int) {
+    layoutManager?.startSmoothScroll(
+        object : LinearSmoothScroller(context) {
+            init {
+                targetPosition = position
+            }
+
+            override fun getVerticalSnapPreference(): Int {
+                return SNAP_TO_END
+            }
+
+            override fun calculateSpeedPerPixel(displayMetrics: DisplayMetrics): Float {
+                return JUMP_SCROLL_MS_PER_INCH / displayMetrics.densityDpi
+            }
+        })
+}
+
+// First/last visible adapter positions. The chat list's runtime AIOLayoutManager is NOT a
+// LinearLayoutManager (the cast returns null at runtime even though the compile stub says it extends
+// one), so try it first, then fall back to a genuine LinearLayoutManager (contacts / nav lists).
+private fun RecyclerView.firstVisiblePosition(): Int =
+    (layoutManager as? AIOLayoutManager)?.findFirstVisibleItemPosition()
+        ?: (layoutManager as? LinearLayoutManager)?.findFirstVisibleItemPosition()
+        ?: RecyclerView.NO_POSITION
+
+private fun RecyclerView.lastVisiblePosition(): Int =
+    (layoutManager as? AIOLayoutManager)?.findLastVisibleItemPosition()
+        ?: (layoutManager as? LinearLayoutManager)?.findLastVisibleItemPosition()
+        ?: RecyclerView.NO_POSITION
