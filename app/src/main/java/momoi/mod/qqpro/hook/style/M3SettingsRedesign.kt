@@ -55,7 +55,7 @@ private fun View.byIdName(name: String): View? {
 
 /** A row distilled from one native settings card. */
 private class HarvestedRow(
-    val title: String,
+    var title: String,
     val subtitle: String?,
     val nativeSwitch: CompoundButton?,
     val click: () -> Unit,
@@ -216,10 +216,15 @@ private fun buildItem(ctx: Context, row: HarvestedRow, afterClick: (() -> Unit)?
             item.setOnClickListener { sw.toggle() }
         }
         row.virtualChecked != null -> {
-            // Action that toggles state (置顶/免打扰): show a switch; toggling runs the native action.
+            // 置顶/免打扰: the native menu exposes only the ONE action matching the CURRENT state
+            // ("免打扰" to enable, or "取消免打扰" to disable) — it's a one-shot performClick, NOT a
+            // reusable two-way toggle. So a flip runs that single action and then closes the sheet;
+            // re-opening re-harvests the now-flipped state deterministically (from which action the
+            // native menu shows). Without the dismiss, flipping back re-runs the SAME one-way action
+            // and desyncs ("turn on then off → still on"), and the captured label never refreshes.
             val sw = M3Switch(ctx)
             sw.setChecked(row.virtualChecked == true, notify = false)
-            sw.onChange = { row.click() }
+            sw.onChange = { row.click(); afterClick?.invoke() }
             item.trailing(sw)
             item.setOnClickListener { sw.toggle() }
         }
@@ -414,7 +419,11 @@ fun rebuildSettingList(
     // Render 置顶/免打扰 action rows as state switches (state inferred from the 取消X label).
     if (syntheticToggles) rows.forEach { r ->
         if (r.nativeSwitch == null && (r.title.contains("置顶") || r.title.contains("免打扰"))) {
+            // Infer state from the native action label FIRST ("取消X" = currently on), ...
             r.virtualChecked = r.title.contains("取消")
+            // ...then drop the action verb: as a switch the row should read the plain state noun
+            // ("免打扰" / "置顶会话"), not "取消免打扰" / "开启免打扰" — the switch already shows on/off.
+            r.title = if (r.title.contains("置顶")) "置顶会话" else "免打扰"
         }
     }
 
