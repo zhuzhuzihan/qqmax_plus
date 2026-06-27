@@ -107,6 +107,9 @@ object QzoneFeedM3 {
             adapters[key] = adapter
             activeSrl = java.lang.ref.WeakReference(srl)
             rv.adapter = adapter
+            // Let the rotary encoder drive pagination: a programmatic scrollBy can't fire
+            // SmartRefreshLayout's gesture-based load-more, so the crown handler calls it directly.
+            momoi.mod.qqpro.hook.EncoderLoadMore.register(rv, srl)
             // Seed from any data the native adapter already holds (e.g. after a config change).
             nativeList(key, adapterField)?.let { adapter.submit(it) }
             Utils.log("QzoneFeedM3: installed M3 feed adapter (perUser=$perUser)")

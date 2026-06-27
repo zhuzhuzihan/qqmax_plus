@@ -2,6 +2,7 @@ package momoi.mod.qqpro.hook
 
 import android.content.Context
 import android.content.res.Resources
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -9,6 +10,7 @@ import android.widget.ScrollView
 import androidx.core.view.MotionEventCompat
 import androidx.core.view.ViewConfigurationCompat
 import androidx.recyclerview.widget.RecyclerView
+import com.scwang.smart.refresh.layout.SmartRefreshLayout
 import com.tencent.qqlive.module.videoreport.inject.dialog.ReportDialog
 import com.tencent.qqnt.watch.mainframe.MainActivity
 import com.tencent.richframework.widget.matrix.RFWMatrixImageView
@@ -19,12 +21,12 @@ import momoi.mod.qqpro.asGroup
 import momoi.mod.qqpro.forEachAll
 import momoi.mod.qqpro.util.Utils
 import android.os.Looper
+import java.util.WeakHashMap
 import kotlin.math.roundToInt
 
 private val screenCenterX = Resources.getSystem().displayMetrics.widthPixels / 2
 private val point = intArrayOf(Int.MIN_VALUE, 0)
 
-//TODO: 代码复用
 @Mixin
 class 滚轮适配配(context: Context) : ReportDialog(context) {
     private var targetView: View? = null
@@ -32,28 +34,7 @@ class 滚轮适配配(context: Context) : ReportDialog(context) {
         if (targetView?.isInCenter() != true) {
             targetView = window?.decorView?.let { findTarget(it) }
         }
-        val delta =
-            -ev.getAxisValue(MotionEventCompat.AXIS_SCROLL) * ViewConfigurationCompat.getScaledVerticalScrollFactor(
-                ViewConfiguration.get(context), context
-            ) * Settings.encoderScrollSpeed.value
-        (targetView as? RecyclerView)?.let {
-            if (Settings.enableSmoothScroll.value) {
-                it.smoothScrollBy(0, delta.roundToInt())
-            } else {
-                it.scrollBy(0, delta.roundToInt())
-            }
-        }
-        (targetView as? ScrollView)?.let {
-            if (Settings.enableSmoothScroll.value) {
-                it.smoothScrollBy(0, delta.roundToInt())
-            } else {
-                it.scrollBy(0, delta.roundToInt())
-            }
-        }
-        (targetView as? RFWMatrixImageView)?.let {
-            it.scale = (it.scale * (1 + 0.001f * delta)).coerceIn(it.minimumScale, it.maximumScale)
-        }
-        targetView?.scrollBy(0, delta.roundToInt())
+        targetView?.let { applyRotaryScroll(ev, it) }
         return super.dispatchGenericMotionEvent(ev)
     }
 }
@@ -61,7 +42,6 @@ class 滚轮适配配(context: Context) : ReportDialog(context) {
 @Mixin
 class 滚轮适配 : MainActivity() {
     private var targetView: View? = null
-    private var action: (Any.(Float)->Unit)? = null
 
     // AutoSize only patches the shared/app DisplayMetrics density at activity create/start.
     // Visiting the QQPro settings activity or the system file/image picker resets the shared
@@ -98,33 +78,43 @@ class 滚轮适配 : MainActivity() {
         } else if (targetView?.isInCenter() != true) {
             targetView = findTarget(window.decorView)
         }
-        val delta =
-            -ev.getAxisValue(MotionEventCompat.AXIS_SCROLL) * ViewConfigurationCompat.getScaledVerticalScrollFactor(
-                ViewConfiguration.get(this), this
-            ) * Settings.encoderScrollSpeed.value
-        (targetView as? RecyclerView)?.let {
-            if (Settings.enableSmoothScroll.value) {
-                it.smoothScrollBy(0, delta.roundToInt())
-            } else {
-                it.scrollBy(0, delta.roundToInt())
-            }
-        }
-        (targetView as? ScrollView)?.let {
-            if (Settings.enableSmoothScroll.value) {
-                it.smoothScrollBy(0, delta.roundToInt())
-            } else {
-                it.scrollBy(0, delta.roundToInt())
-            }
-        }
-        (targetView as? RFWMatrixImageView)?.let {
-            it.scale = (it.scale * (1 + 0.001f * delta)).coerceIn(it.minimumScale, it.maximumScale)
-        }
+        targetView?.let { applyRotaryScroll(ev, it) }
         // Consume when the overlay is open so the views beneath never see the scroll.
         return if (overlayRoot != null) true else super.dispatchGenericMotionEvent(ev)
     }
 }
 
-private fun findTarget(rootView: View): View? {
+/**
+ * Apply one rotary-encoder turn to a resolved [target]. Shared by every host (chat MainActivity,
+ * the ReportDialog viewers, the settings activity) so the scroll/zoom behaviour stays identical.
+ *
+ * IMPORTANT: a [RFWMatrixImageView] only ZOOMS — it must never also `scrollBy`, or a zoomed-out
+ * image (already at minimumScale) would pan off-screen on every crown turn. So this dispatches by
+ * type and does nothing for a view that is none of the three handled kinds.
+ */
+fun applyRotaryScroll(ev: MotionEvent, target: View) {
+    val ctx = target.context
+    val delta = -ev.getAxisValue(MotionEventCompat.AXIS_SCROLL) *
+        ViewConfigurationCompat.getScaledVerticalScrollFactor(ViewConfiguration.get(ctx), ctx) *
+        Settings.encoderScrollSpeed.value
+    val d = delta.roundToInt()
+    when (target) {
+        is RecyclerView -> {
+            if (Settings.enableSmoothScroll.value) target.smoothScrollBy(0, d) else target.scrollBy(0, d)
+            // Programmatic scrollBy never produces the overscroll gesture that SmartRefreshLayout
+            // uses to page; when the crown drives a registered feed to its bottom, kick load-more.
+            if (d > 0 && !target.canScrollVertically(1)) EncoderLoadMore.trigger(target)
+        }
+        is ScrollView -> {
+            if (Settings.enableSmoothScroll.value) target.smoothScrollBy(0, d) else target.scrollBy(0, d)
+        }
+        is RFWMatrixImageView -> {
+            target.scale = (target.scale * (1 + 0.001f * delta)).coerceIn(target.minimumScale, target.maximumScale)
+        }
+    }
+}
+
+fun findTarget(rootView: View): View? {
     var target: View? = null
     rootView.asGroup().forEachAll {
         if (target != null) return@forEachAll
@@ -142,4 +132,32 @@ fun View.isInCenter(): Boolean {
     if (!isAttachedToWindow) return false
     getLocationOnScreen(point)
     return point[0] <= screenCenterX && point[0] + width > screenCenterX
+}
+
+/**
+ * Bridges crown scrolling to the materialized QZone feed's pagination. The feed loads more only
+ * through SmartRefreshLayout's native OnLoadMoreListener (fired by a touch overscroll/fling), which
+ * a programmatic `scrollBy` never triggers — so the crown would get stuck at the end of a page.
+ * [QzoneFeedM3] registers each feed RecyclerView with its SmartRefreshLayout here; when the crown
+ * scrolls one to the bottom, we invoke the same `t0.q(srl)` callback the gesture would have.
+ */
+object EncoderLoadMore {
+    private val hosts = WeakHashMap<RecyclerView, SmartRefreshLayout>()
+    private var lastTrigger = 0L
+
+    fun register(rv: RecyclerView, srl: SmartRefreshLayout) {
+        hosts[rv] = srl
+    }
+
+    fun trigger(rv: RecyclerView) {
+        val srl = hosts[rv] ?: return
+        val now = SystemClock.uptimeMillis()
+        if (now - lastTrigger < 800L) return  // one page per ~0.8s; the engine guards re-entrancy too
+        lastTrigger = now
+        runCatching {
+            val listener = srl.t0 ?: return
+            listener.q(srl)
+            Utils.log("EncoderLoadMore: triggered feed load-more")
+        }.onFailure { Utils.log("EncoderLoadMore.trigger: $it") }
+    }
 }

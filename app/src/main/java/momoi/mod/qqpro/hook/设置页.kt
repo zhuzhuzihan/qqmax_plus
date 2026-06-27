@@ -12,6 +12,7 @@ import android.graphics.drawable.LayerDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -227,6 +228,17 @@ class 设置页 : SettingsActivity() {
     override fun finish() {
         super.finish()
         overridePendingTransition(0, 0)
+    }
+
+    // Rotary-encoder (crown) scrolling. This is a separate Activity from the chat MainActivity, so it
+    // needs its own dispatchGenericMotionEvent — without it the crown never reaches these ScrollViews.
+    // Scope to the layer that's actually on top: the detail layer when open, else the level-1 list.
+    // Resolve fresh each event (the tree is tiny) so we never keep scrolling the level-1 list behind
+    // an open detail page. Reuses findTarget/applyRotaryScroll from 滚轮适配.kt.
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        val root = if (inSettingsDetail) detailLayer else settingsContainer
+        root?.let { findTarget(it) }?.let { applyRotaryScroll(ev, it) }
+        return super.dispatchGenericMotionEvent(ev)
     }
 
     /** Tappable header at the top of a detail page; [onBack] returns to the category list. */
