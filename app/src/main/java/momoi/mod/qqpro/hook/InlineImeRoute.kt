@@ -47,6 +47,14 @@ fun a(
     callback: ((Any?) -> Unit)?,
     flag: Int,
 ) {
+    // 全员禁言: a muted non-admin must not open the keyboard by ANY route that funnels through here —
+    // reply / @ / edit / keyboard button (src="aio") or STT (src="stt"). The input bar is hidden
+    // elsewhere; this blocks the actual opens (inline AND the native keyboard page below).
+    if ((src == "aio" || src == "stt") && momoi.mod.qqpro.hook.style.isWholeMutedForSelf()) {
+        Utils.log("InlineImeRoute: blocked src=$src (全员禁言)")
+        runCatching { Utils.toast(fragment.requireContext(), "全员禁言中") }
+        return
+    }
     if ((src == "aio" || src == "stt") &&
         Settings.inlineChatInput.value && Settings.fullInlineInput.value &&
         InlineInput.isReady

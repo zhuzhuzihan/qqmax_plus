@@ -34,7 +34,9 @@ class KeepInputBarOnScroll : `WatchAIOListVB$onCreateView$7`() {
             val ctrl = vb.J
             // m = showArrowListener; onClick runs showFlowInput → floating overlay (state 2), pinned over
             // the chat. Guarded so it animates in once and then stays floating while scrolling.
-            if (ctrl.g != 2) {
+            // 全员禁言: don't pop the floating input bar for a muted non-admin — it would surface the
+            // EditText that the footer hint hides. Leave the native collapse-to-arrow behavior instead.
+            if (ctrl.g != 2 && !isWholeMutedForSelf()) {
                 ctrl.m.onClick(recyclerView)
                 Utils.log("KeepInputBarOnScroll: float popped (state=${ctrl.g})")
             }

@@ -74,7 +74,10 @@ object ChatPullUpKeyboard {
                             if (baselineY.isNaN()) baselineY = ev.y
                             if (!fired && baselineY - ev.y > threshold) {
                                 fired = true
-                                if (Settings.inlineChatInput.value && InlineInput.isReady) {
+                                // 全员禁言: don't let a muted non-admin pull up the keyboard.
+                                if (Settings.inlineChatInput.value && InlineInput.isReady &&
+                                    !momoi.mod.qqpro.hook.style.isWholeMutedForSelf()
+                                ) {
                                     Utils.log("ChatPullUpKeyboard: pull-up over threshold -> open keyboard")
                                     InlineInput.openKeyboard()
                                 }

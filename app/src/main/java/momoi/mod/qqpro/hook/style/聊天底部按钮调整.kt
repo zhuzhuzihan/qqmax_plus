@@ -592,3 +592,22 @@ fun showMutedHint(bar: ViewGroup) {
     )
     Utils.log("muteHint: input bar hidden, showing 全员禁言中")
 }
+
+/**
+ * Synchronous "is the current chat under 全员禁言 and am I not allowed to speak?" — the gate the actual
+ * input ENTRY POINTS use. [showMutedHint] only hides the visible input bar; without this a muted
+ * non-admin can still surface the EditText via the pull-up keyboard, a reply tap, an @, an edit, or
+ * STT — none of which look at that bar. Gate those opens with this instead.
+ *
+ * Mute is the sync per-group cache ([GroupAIOHelper] `shutUpAllTimestamp`); self role is the sync bulk
+ * member cache ([CurrentGroupMembers.info]). If the role isn't cached yet the group is still confirmed
+ * muted, so block (fail closed) — a brief block for an admin whose list hasn't loaded beats letting a
+ * muted member type. Public for cross-package access from the @StaticHook / @Mixin call sites.
+ */
+fun isWholeMutedForSelf(): Boolean {
+    if (!Settings.muteHideInputBar.value || !CurrentContact.isGroup) return false
+    val detail = runCatching { GroupAIOHelper.b[CurrentContact.peerUid] }.getOrNull() ?: return false
+    if (detail.shutUpAllTimestamp == 0) return false
+    val role = CurrentGroupMembers.info?.get(SelfContact.peerUid)?.role
+    return role != MemberRole.OWNER && role != MemberRole.ADMIN
+}
