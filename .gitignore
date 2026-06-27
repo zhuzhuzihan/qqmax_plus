@@ -19,3 +19,6 @@ app/dist/output-metadata.json
 app/decompiled/
 # QQPro investigation scratch (pulled device artifacts)
 work/
+
+# local RE tooling (Ghidra etc.) — do not commit
+/tools/
