@@ -20,6 +20,7 @@ import momoi.mod.qqpro.enums.NTMsgType
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.fitEmojiSpans
 import momoi.mod.qqpro.renderQQFaces
+import momoi.mod.qqpro.hook.ChatMultiSelect
 import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentGroupMembers
 import momoi.mod.qqpro.hook.action.CurrentMsgList
@@ -184,6 +185,12 @@ object AIOCell {
             p6: LifecycleOwner?
         ) {
             super.i(view, item, p3, p4, p5, p6)
+            // 消息多选: record this cell's view→msgId so a tap/long-press in multi-select mode can
+            // resolve which message was hit, and install the selection touch listener + decoration on
+            // the RecyclerView (once per list). No-op (transparent) unless multi-select is active.
+            runCatching {
+                ChatMultiSelect.bindCell(view, item.d.msgId, item.d.msgType)
+            }.onFailure { Utils.log("ChatMultiSelect.bindCell failed: $it") }
             // Universal per-bind diagnostic: log EVERY message as it binds, not just the
             // WatchToQQView placeholder / text bubbles. Previously most cell types (pic, mix,
             // ark, file, forward, markdown, …) emitted no log line at all, so messages appeared

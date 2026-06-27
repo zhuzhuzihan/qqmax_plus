@@ -6,6 +6,7 @@ import com.tencent.qqnt.kernel.nativeinterface.IOperateCallback
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement
 import com.tencent.qqnt.kernel.nativeinterface.MsgRecord
 import com.tencent.qqnt.watch.contact.api.IContactRuntimeService
+import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import com.tencent.watch.ime.util.ImeTextUtil
 import momoi.mod.qqpro.MsgUtil
 import momoi.mod.qqpro.hook.action.CurrentContact
@@ -15,6 +16,7 @@ import download
 import momoi.mod.qqpro.msg.getImageUrl
 import momoi.mod.qqpro.util.Utils
 import mqq.app.MobileQQ
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -71,7 +73,7 @@ fun View.forwardText(text: CharSequence) = forwardToFriends {
  * (video / voice / sticker …). File / 合并转发聊天记录 / 群邀请(ark) can't be re-sent this way, so the
  * caller must not offer this for those types.
  */
-fun View.forwardMsgRecord(msg: MsgRecord, title: String = "转发") {
+fun View.forwardMsgRecord(msg: MsgRecord, msgItem: WatchAIOMsgItem? = null, title: String = "转发") {
     Utils.log("forwardMsgRecord: begin msgId=${msg.msgId} type=${msg.msgType} elems=${msg.elements?.map { it.elementType }}")
     val navFragment = WatchPicElementExtKt.W(this)?.let { WatchPicElementExtKt.Y(it) }
     if (navFragment == null) {
@@ -100,7 +102,7 @@ fun View.forwardMsgRecord(msg: MsgRecord, title: String = "转发") {
             // as-is. Other media (video/voice/sticker) already carry re-usable refs.
             val original = ArrayList(msg.elements ?: emptyList())
             Thread {
-                val elements = rebuildForForward(original)
+                val elements = rebuildForForward(original, msgItem)
                 Utils.log("forwardMsgRecord: re-sending ${elements.size} element(s) via sendMsg")
                 friends.forEach { friend ->
                     val dst = Contact(if (friend.e) 2 else 1, friend.b, "")
@@ -124,12 +126,12 @@ fun View.forwardMsgRecord(msg: MsgRecord, title: String = "转发") {
  * point at the sender's local path and won't second-transfer otherwise). Runs the rebuild off the
  * UI thread because it blocks on the image download.
  */
-fun repeatMsgRecord(msg: MsgRecord) {
+fun repeatMsgRecord(msg: MsgRecord, msgItem: WatchAIOMsgItem? = null) {
     Utils.log("repeatMsgRecord: begin msgId=${msg.msgId} elems=${msg.elements?.map { it.elementType }}")
     val original = ArrayList(msg.elements ?: emptyList())
     val contact = Contact(CurrentContact.chatType, CurrentContact.peerUid, CurrentContact.guildId)
     Thread {
-        val elements = rebuildForForward(original)
+        val elements = rebuildForForward(original, msgItem)
         Utils.log("repeatMsgRecord: re-sending ${elements.size} element(s) via sendMsg")
         MsgUtil.msgService.sendMsg(
             contact, 0L, elements,
@@ -143,45 +145,33 @@ fun repeatMsgRecord(msg: MsgRecord) {
  * fresh local file and build a new pic element from it; pass other elements through). Exposed so the
  * 编辑 flow can stage re-sendable image elements. Must run off the UI thread (blocks on download).
  */
-fun rebuildElementsForResend(elements: List<MsgElement>): ArrayList<MsgElement> =
-    rebuildForForward(elements)
+fun rebuildElementsForResend(elements: List<MsgElement>, msgItem: WatchAIOMsgItem? = null): ArrayList<MsgElement> =
+    rebuildForForward(elements, msgItem)
 
 /**
- * Replace each PicElement with a fresh pic MsgElement built from a freshly-downloaded local file
- * (so it can actually be uploaded on forward). Must run off the UI thread (blocks on download).
- * Falls back to the original element if the download/build fails.
+ * Replace each PicElement with a fresh pic MsgElement built from the kernel's local ORIGINAL file, so
+ * it can actually be uploaded on forward. Must run off the UI thread (blocks on download).
+ *
+ * Resolution goes through [resolveOriginalPicFile] (the same robust path 保存/系统分享 use): on-disk
+ * original → md5 cache → KERNEL download via AIOPicDownloader (needs [msgItem]) → HTTP. The earlier
+ * bug was that we only tried C0/HTTP — if the image had never been opened full-screen there was no
+ * on-disk file and the HTTP url gave "rich media transfer failed"; the kernel download fixes that,
+ * but it only runs when the caller threads through the [msgItem]. Falls back to the original element.
  */
-private fun rebuildForForward(elements: List<MsgElement>): ArrayList<MsgElement> {
+private fun rebuildForForward(elements: List<MsgElement>, msgItem: WatchAIOMsgItem?): ArrayList<MsgElement> {
     val out = ArrayList<MsgElement>(elements.size)
     elements.forEach { ele ->
-        val pic = ele.picElement
-        if (pic == null) {
+        if (ele.picElement == null) {
             out.add(ele)
             return@forEach
         }
-        val url = runCatching { pic.getImageUrl() }.getOrNull()
-        if (url.isNullOrEmpty()) {
-            Utils.log("forwardMsgRecord: pic has no url, sending original element")
-            out.add(ele)
-            return@forEach
-        }
-        val cacheDir = Utils.application.safeCacheDir
-        if (cacheDir == null) {
-            Utils.log("forwardMsgRecord: no cache dir available, sending original element")
-            out.add(ele)
-            return@forEach
-        }
-        val file = cacheDir.child("fwd_${System.currentTimeMillis()}_${pic.md5HexStr}.jpg")
-        val latch = CountDownLatch(1)
-        var ok = false
-        download(url, file) { ok = it; latch.countDown() }
-        latch.await(70, TimeUnit.SECONDS)
-        if (ok && file.exists() && file.length() > 0L) {
+        val file = resolveOriginalPicFile(Utils.application, ele, msgItem)
+        if (file != null) {
             runCatching { com.tencent.watch.aio_impl.ext.MsgUtil().a(file.path, 0) }
-                .onSuccess { out.add(it); Utils.log("forwardMsgRecord: rebuilt pic element from ${file.path}") }
-                .onFailure { Utils.log("forwardMsgRecord: pic build failed: $it, sending original"); out.add(ele) }
+                .onSuccess { out.add(it); Utils.log("forward: rebuilt pic element from ${file.path}") }
+                .onFailure { Utils.log("forward: pic build failed: $it, sending original"); out.add(ele) }
         } else {
-            Utils.log("forwardMsgRecord: pic download failed url=$url, sending original element")
+            Utils.log("forward: could not resolve original pic file, sending original element")
             out.add(ele)
         }
     }

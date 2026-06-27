@@ -89,6 +89,50 @@ fun View.shareMessage(msg: MsgRecord, msgItem: WatchAIOMsgItem?) {
 }
 
 /**
+ * Batch system-share: stage every selected message's media into ONE share sheet (joined text +
+ * ACTION_SEND_MULTIPLE for the files). Reuses the same private stagers as [shareMessage]; pic
+ * resolution passes a null msgItem (on-disk → md5 cache → HTTP fallback, no kernel download).
+ */
+fun View.shareMessages(msgs: List<MsgRecord>) {
+    val ctx = context.applicationContext
+    val text = msgs.mapNotNull { m ->
+        m.elements?.mapNotNull { it.textElement?.content }?.joinToString("")?.takeIf { it.isNotBlank() }
+    }.joinToString("\n").takeIf { it.isNotBlank() }
+    val allEls = msgs.flatMap { it.elements ?: emptyList() }
+    val hasMedia = allEls.any { it.picElement != null || it.videoElement != null || it.pttElement != null }
+    if (!hasMedia) {
+        if (text != null) startSend(ctx, ArrayList(), ArrayList(), text) else Utils.toast(context, "没有可分享的内容")
+        return
+    }
+    Utils.toast(context, "正在准备分享…")
+    Thread {
+        val staged = ArrayList<Pair<File, String>>()
+        runCatching {
+            allEls.forEach { el ->
+                when {
+                    el.picElement != null -> resolvePicFile(ctx, el, null)?.let { src -> stagePic(ctx, src)?.let { staged.add(it) } }
+                    el.videoElement != null -> resolveVideoFile(el, null)?.let { src -> stageAs(ctx, src, "mp4", "video/mp4")?.let { staged.add(it) } }
+                    el.pttElement != null -> localFile(el.pttElement.filePath)?.let { src -> stageCopy(ctx, src, mimeForExt(src.extension))?.let { staged.add(it) } }
+                }
+            }
+        }.onFailure { Utils.log("shareMessages: staging error: $it") }
+        val uris = ArrayList<Uri>()
+        val mimes = ArrayList<String>()
+        staged.forEach { (file, mime) ->
+            runCatching { fileUri(ctx, file) }.onSuccess { uris.add(it); mimes.add(mime) }
+                .onFailure { Utils.log("shareMessages: uri failed for ${file.path}: $it") }
+        }
+        runOnUi {
+            when {
+                uris.isNotEmpty() -> startSend(ctx, uris, mimes, text)
+                text != null -> startSend(ctx, ArrayList(), ArrayList(), text)
+                else -> Utils.toast(context, "分享内容不可用")
+            }
+        }
+    }.start()
+}
+
+/**
  * Copy the message's (first) image to the system clipboard as a content URI, so it can be pasted
  * into other apps. Resolves the original file the same way [shareMessage] does (on-disk → kernel
  * download → HTTP), copies it into the FileProvider-shared dir, then puts a [ClipData.newUri] on the
@@ -178,7 +222,12 @@ private fun localFile(path: String?): File? =
 /**
  * Resolve a pic element to a local original file, mirroring 保存图片(原图): try the on-disk original,
  * else kernel-download it (when we have the [msgItem]), else HTTP fallback. Blocking — off UI thread.
+ * Public so the forward/复读 rebuild ([rebuildForForward]) can get a real original even when the image
+ * was never opened full-screen (no on-disk file yet) — the cause of "rich media transfer failed".
  */
+fun resolveOriginalPicFile(ctx: Context, el: MsgElement, msgItem: WatchAIOMsgItem?): File? =
+    resolvePicFile(ctx, el, msgItem)
+
 private fun resolvePicFile(ctx: Context, el: MsgElement, msgItem: WatchAIOMsgItem?): File? {
     // Obfuscated names: AIOPicDownloader.a == the singleton instance; .d() resolves the local
     // original path; .a() kicks off a kernel download. PicSize.e == PIC_DOWNLOAD_ORI (ordinal 3).

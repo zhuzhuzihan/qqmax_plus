@@ -62,6 +62,9 @@ object Settings {
     // Group chat avatar size, as a multiple of the nickname text size. Default 2.5x.
     val avatarSizeScale = FloatPref("avatarSizeScale", 2.5f)
     val hideRepeatedSender = BooleanPref("hideRepeatedSender", true)
+    // 消息多选: show a "多选" entry in the chat long-press menu to enter multi-select mode (tap
+    // messages to select). Off by default.
+    val chatMultiSelect = BooleanPref("chatMultiSelect", false)
     // Show a "+1" pill on the latest message when it repeats the previous one (tap to send it again).
     val plusOneButton = BooleanPref("plusOneButton", true)
     // Replace the group message sender NAME with our resolved 群名片/备注/昵称. Off by default:
