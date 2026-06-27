@@ -101,46 +101,68 @@ inline fun download(
 ) {
     downloadExecutor.execute {
         var connection: HttpURLConnection? = null
-        val uri = rawUrl.toUri()
-        val url = if (uri.scheme.isNullOrEmpty()) {
-            URL("https://$rawUrl")
-        } else URL(rawUrl.replace("http://", "https://"))
+        // Force the FIRST request to https (some hosts refuse cleartext), then follow redirects
+        // MANUALLY. HttpURLConnection's built-in follower refuses a redirect that crosses protocol
+        // (https→http) — exactly what QZone's original-photo host r.photo.store.qq.com /o URLs do
+        // (302 → an http CDN), which surfaced as "Download Image Failed! code=302" and the error.jpg
+        // placeholder in the full-screen viewer. Following by hand restores cross-protocol redirects.
+        var current = rawUrl.toUri().let { uri ->
+            if (uri.scheme.isNullOrEmpty()) "https://$rawUrl" else rawUrl.replace("http://", "https://")
+        }
         try {
-            connection = url.openConnection() as HttpURLConnection
-            connection.instanceFollowRedirects = true
-            connection.connectTimeout = 60_000 // 60秒超时
-            connection.readTimeout = 10_000
-            connection.requestMethod = "GET"
-            connection.doInput = true
-            Utils.log("Download Image From: $url")
-            connection.connect()
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                if (!file.exists()) {
-                    file.createNewFile()
+            var redirects = 0
+            while (true) {
+                connection?.disconnect()
+                connection = (URL(current).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false // we follow manually so we can cross protocols
+                    connectTimeout = 60_000 // 60秒超时
+                    readTimeout = 10_000
+                    requestMethod = "GET"
+                    doInput = true
                 }
-                // Copy in a loop so we can report download progress (Content-Length) for a
-                // determinate indicator; total <= 0 (chunked/unknown) leaves it indeterminate.
-                val total = connection.contentLengthLong
-                connection.inputStream.use { input ->
-                    file.outputStream().use { out ->
-                        val buf = ByteArray(16 * 1024)
-                        var read: Int
-                        var done = 0L
-                        while (input.read(buf).also { read = it } >= 0) {
-                            out.write(buf, 0, read)
-                            done += read
-                            if (total > 0) onProgress((done.toFloat() / total).coerceIn(0f, 1f))
-                        }
+                Utils.log("Download Image From: $current")
+                connection.connect()
+                val code = connection.responseCode
+                if (code in 300..399) {
+                    val loc = connection.getHeaderField("Location")
+                    if (loc != null && redirects < 5) {
+                        // Resolve against the current URL (handles a relative Location) and keep the
+                        // server's scheme — this is the cross-protocol follow the built-in client skips.
+                        current = URL(URL(current), loc).toString()
+                        redirects++
+                        Utils.log("Download Image redirect $code -> $current")
+                        continue
                     }
                 }
-                callback(true)
-            } else {
-                callback(false)
-                Utils.log("Download Image Failed! code=${connection.responseCode} url=${connection.url}")
+                if (code == HttpURLConnection.HTTP_OK) {
+                    if (!file.exists()) {
+                        file.createNewFile()
+                    }
+                    // Copy in a loop so we can report download progress (Content-Length) for a
+                    // determinate indicator; total <= 0 (chunked/unknown) leaves it indeterminate.
+                    val total = connection.contentLengthLong
+                    connection.inputStream.use { input ->
+                        file.outputStream().use { out ->
+                            val buf = ByteArray(16 * 1024)
+                            var read: Int
+                            var done = 0L
+                            while (input.read(buf).also { read = it } >= 0) {
+                                out.write(buf, 0, read)
+                                done += read
+                                if (total > 0) onProgress((done.toFloat() / total).coerceIn(0f, 1f))
+                            }
+                        }
+                    }
+                    callback(true)
+                } else {
+                    callback(false)
+                    Utils.log("Download Image Failed! code=$code url=${connection.url}")
+                }
+                break
             }
         } catch (e: Exception) {
             callback(false)
-            Utils.log("Download Image Exception for $url: ${e.javaClass.simpleName}: ${e.message}")
+            Utils.log("Download Image Exception for $current: ${e.javaClass.simpleName}: ${e.message}")
             e.printStackTrace()
         } finally {
             connection?.disconnect()
