@@ -55,7 +55,10 @@ object RichTitlebar {
     private var cornerPx: Int = 0
     private var screenWPx: Int = 0
     private var peer: String = ""
-    private val unread = HashMap<String, Int>()
+    // ConcurrentHashMap: the kernel UnreadListener mutates this on a binder thread while applyUnread
+    // iterates it on the UI thread — a plain HashMap there can throw ConcurrentModificationException
+    // (see the same fix in MainNav.unread).
+    private val unread = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private val listenerRegistered = AtomicBoolean(false)
 
     fun build(fragment: androidx.fragment.app.Fragment, root: ViewGroup, baseInset: Int = 0) {

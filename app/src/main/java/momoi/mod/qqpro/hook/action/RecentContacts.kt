@@ -128,7 +128,10 @@ object RecentContacts {
     // kernel listeners push unread counts and RecentContactInfo before the WatchRecentItemBuilder
     // binds, so [map] may not have the entry yet. Both the list-render path and the kernel-listener
     // paths feed this via [recordMuted].
-    private val mutedMap = mutableMapOf<String, Boolean>()
+    // ConcurrentHashMap: written off the UI thread by the kernel UnreadListener path
+    // (MainNav/RichTitlebar put() → recordMuted) as well as on the UI thread (list bind), and read on
+    // the UI thread via isDisturb. A plain HashMap with concurrent get/put can corrupt during a resize.
+    private val mutedMap = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     /**
      * A chat is muted (DND) when isMsgDisturb is set OR shieldFlag is outside {0,1}: 0 = 好友默认,
@@ -143,8 +146,10 @@ object RecentContacts {
     }
 
     /** Whether this peer is muted (DND). Prefers the live [mutedMap], falls back to [map]. */
-    fun isDisturb(peerUid: String?): Boolean =
-        mutedMap[peerUid] ?: map[peerUid]?.disturb ?: false
+    fun isDisturb(peerUid: String?): Boolean {
+        if (peerUid == null) return false // ConcurrentHashMap.get(null) would throw
+        return mutedMap[peerUid] ?: map[peerUid]?.disturb ?: false
+    }
     class Data(
         val raw: RecentContactInfo,
         val unreadCntCached: Int,

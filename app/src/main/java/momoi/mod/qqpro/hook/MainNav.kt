@@ -58,7 +58,11 @@ object MainNav {
     private val BADGE_COLOR = M3.badge
 
     // Live unread, kept in sync by the kernel listener — same source RichTitlebar uses.
-    private val unread = HashMap<String, Int>()
+    // ConcurrentHashMap: the kernel UnreadListener mutates this on a binder thread while the
+    // high-frequency scroll listener iterates it on the UI thread (messagesUnread). A plain
+    // HashMap there threw ConcurrentModificationException; the concurrent map's weakly-consistent
+    // iterator never does.
+    private val unread = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private var listenerAdded = false
 
     // Published by ContactListFragmentHook (friend + group notification counts). Best-effort: only
