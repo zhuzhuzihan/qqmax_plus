@@ -214,6 +214,12 @@ object Settings {
     // Max display height for chat images, as a fraction of the screen height. Caps tall
     // images so they don't fill the watch screen. Default 0.5 (half the screen).
     val picMaxHeightRatio = FloatPref("picMaxHeightRatio", 0.5f)
+    // Long-screenshot support in the full-screen image viewer. When a picture is at least 2x
+    // taller than the screen (a long screenshot), open it fitted to the screen WIDTH (so the
+    // text is readable) anchored at the top, instead of the native fit-whole-height (a thin
+    // column). Double-tap then cycles: level 1 = match height (whole image), level 2 = match
+    // width (scroll up/down), level 3 = zoom in even more.
+    val longScreenshot = BooleanPref("longScreenshot", true)
     // Rounded-corner radius (in dp) for chat bubbles, the merged-forward/chat-history
     // blocks and the reply block. 0 = square.
     val bubbleCornerRadius = FloatPref("bubbleCornerRadius", 10f)
@@ -394,7 +400,7 @@ object Settings {
         floatUnreadInChat, titlebarHeight, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
-        picMaxHeightRatio, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
+        picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,

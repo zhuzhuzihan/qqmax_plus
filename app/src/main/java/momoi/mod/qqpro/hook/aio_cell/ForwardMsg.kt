@@ -50,6 +50,7 @@ import momoi.mod.qqpro.hook.forwardToFriends
 import momoi.mod.qqpro.hook.style.MyImageView
 import momoi.mod.qqpro.hook.view.MyDialogFragment
 import momoi.mod.qqpro.hook.view.smoothScrollToStart
+import momoi.mod.qqpro.lib.applyLongScreenshotFit
 import momoi.mod.qqpro.lib.FILL
 import momoi.mod.qqpro.lib.background
 import momoi.mod.qqpro.lib.clickable
@@ -118,19 +119,19 @@ class BigImageFragment(
         val onProgress = { p: Float -> spinner.indeterminate = false; spinner.progress = p }
         when {
             // Pre-rendered bitmap (market face / bulletin / card): show at once, no loading.
-            bmp != null -> { image.setImageBitmap(bmp); spinner.visibility = View.GONE }
+            bmp != null -> { image.setImageBitmap(bmp); spinner.visibility = View.GONE; image.applyLongScreenshotFit() }
             kernelLoad != null -> {
                 kernelLoad(onProgress) { path ->
                     spinner.visibility = View.GONE
                     val f = path?.let { java.io.File(it) }
-                    if (f != null && f.exists() && f.length() > 0) image.bitmapDecodeFile(f)
+                    if (f != null && f.exists() && f.length() > 0) { image.bitmapDecodeFile(f); image.applyLongScreenshotFit() }
                     else image.loadErrorImage()
                 }
             }
             pic != null -> {
                 image.loadPicElement(
                     pic,
-                    onDone = { spinner.visibility = View.GONE },
+                    onDone = { spinner.visibility = View.GONE; image.applyLongScreenshotFit() },
                     onProgress = onProgress,
                 )
             }

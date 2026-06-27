@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.tencent.richframework.widget.matrix.RFWMatrixImageView
 import loadPicUrl
+import momoi.mod.qqpro.lib.applyLongScreenshotFit
 import momoi.mod.qqpro.lib.bitmapDecodeFile
 import momoi.mod.qqpro.lib.dp
 import momoi.mod.qqpro.lib.imageFitsHorizontally
@@ -163,6 +164,7 @@ object MediaPager {
             if (localFile != null) {
                 h.spinner.visibility = View.GONE
                 h.image.bitmapDecodeFile(localFile)
+                h.image.applyLongScreenshotFit()
             } else if (!(item.fullUrl ?: item.imageUrl).isNullOrEmpty()) {
                 // Fullscreen loads the FULL-resolution URL (feed preview used the smaller one).
                 val fullSrc = item.fullUrl ?: item.imageUrl!!
@@ -173,7 +175,7 @@ object MediaPager {
                     // Stable, URL-derived cache name so swiping back hits the disk cache instead of
                     // re-downloading every bind (the default name is time-based → never cached).
                     cacheFileName = "qzmedia_${fullSrc.hashCode()}",
-                    onDone = { h.spinner.visibility = View.GONE },
+                    onDone = { h.spinner.visibility = View.GONE; h.image.applyLongScreenshotFit() },
                     onProgress = { p -> h.spinner.indeterminate = false; h.spinner.progress = p },
                 )
             } else {
