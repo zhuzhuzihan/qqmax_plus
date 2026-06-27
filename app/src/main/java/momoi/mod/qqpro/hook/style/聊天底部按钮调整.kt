@@ -280,7 +280,15 @@ class 聊天底部按钮调整() : `InputBarController$inputContent$2`() {
                                 gravity = if (inlineGrow) Gravity.BOTTOM else Gravity.CENTER_VERTICAL
                             }
                             pill.addView(row, LinearLayout.LayoutParams(FILL, WRAP))
-                            pill.addView(inputRow, LinearLayout.LayoutParams(FILL, 0).apply { weight = 1f })
+                            // Base height = lineH (NOT 0): a height-0 weighted child only expands when
+                            // the pill has a fixed height, but the pill's height comes from the bar
+                            // container, which is only sized by applyInlineGrow (wired only when
+                            // inlineGrow is on, and only after the EditText lays out). In the float host
+                            // (WRAP_CONTENT) or with 单行输入 on, the pill would otherwise measure this row
+                            // at 0 → the whole input section collapses to 0px and stops receiving touch
+                            // until an @-insert focuses the field and forces a grow. A lineH base makes
+                            // the pill always wrap to at least one row; weight still lets it grow upward.
+                            pill.addView(inputRow, LinearLayout.LayoutParams(FILL, lineH).apply { weight = 1f })
                             inputRow
                         } else pill
                         contentGroup.content {
