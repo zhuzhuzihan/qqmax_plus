@@ -20,6 +20,7 @@ import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.asGroup
 import momoi.mod.qqpro.drawable.roundCornerDrawable
 import momoi.mod.qqpro.lib.material.M3
+import momoi.mod.qqpro.lib.material.M3CircularProgress
 import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.action.RecentContacts
@@ -55,7 +56,9 @@ private data class JumpPoint(val seq: Long?, val label: String)
  */
 class SkipAction(
     private val rv: RecyclerView,
+    private val chip: View,
     private val tv: TextView,
+    private val spinner: M3CircularProgress,
     private val recent: RecentContacts.Data
 ): View.OnClickListener {
 
@@ -86,20 +89,29 @@ class SkipAction(
 
     private fun head(): JumpPoint? = points.firstOrNull()
 
-    /** Repaint the chip for the current head stop (terminal stop shows the live remaining count). */
-    private fun refreshLabel() {
-        val h = head() ?: return hide()
-        tv.text = if (h.seq == null) format(count) else "↑ ${h.label}"
+    /** The chip text WITHOUT the leading ↑ (terminal stop shows the live remaining count). */
+    private fun bodyLabel(): String {
+        val h = head() ?: return ""
+        return if (h.seq == null) "${count}条新消息" else h.label
+    }
+
+    /**
+     * Repaint the chip for the current head stop. While [loading] the ↑ is dropped — the circular
+     * progress on the left takes the arrow's place — and the arrow returns once the jump finishes.
+     */
+    private fun refreshLabel(loading: Boolean = false) {
+        if (head() == null) return hide()
+        tv.text = if (loading) bodyLabel() else "↑ ${bodyLabel()}"
     }
 
     private fun hide() {
         isFinished = true
-        tv.visibility = View.GONE
+        chip.visibility = View.GONE
     }
 
     init {
         refreshLabel()
-        tv.setOnClickListener(this)
+        chip.setOnClickListener(this)
         rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (isFinished) return
@@ -140,36 +152,55 @@ class SkipAction(
         val list = CurrentMsgList.msgList.value
         Utils.log("SkipAction click: head=${h.label} seq=${h.seq} count=$count listSize=${list.size}")
 
-        val onProgress: (Int) -> Unit = { tv.text = "加载中…" }
-        val onFail: () -> Unit = {
-            Utils.toast(tv.context, "加载失败，请重试")
+        // Drive the circular spinner on the chip's left while the jump loads. It starts indeterminate
+        // (we don't yet know how many pages we'll fetch) and flips to determinate as soon as upwardMsg/
+        // findMsg report a 0..100 percentage — "show the progress whenever possible".
+        val onProgress: (Int) -> Unit = { pct ->
+            spinner.indeterminate = false
+            spinner.progress = pct.coerceIn(0, 100) / 100f
+        }
+        // Jump finished (success or fail): hide the spinner, reset it, and bring the ↑ back.
+        val done = {
+            spinner.visibility = View.GONE
+            spinner.indeterminate = true
+            spinner.progress = 0f
             isClicked = false
             refreshLabel()
+        }
+        val onFail: () -> Unit = {
+            done()
+            Utils.toast(tv.context, "加载失败，请重试")
         }
         // Remember where we are now and show the back-down button so the user can return here.
         BubbleTextView.beginJumpUp()
         isClicked = true
+        // Drop the ↑ and show the spinner in its place immediately (indeterminate until the first
+        // progress tick) so the press gives instant feedback that the jump is working.
+        spinner.indeterminate = true
+        spinner.progress = 0f
+        spinner.visibility = View.VISIBLE
+        refreshLabel(loading = true)
         if (h.seq != null) {
             // Important stop: locate the exact message (paging up if needed) and smooth-scroll to it.
             // The scroll listener pops it and advances to the next stop once it lands in view.
             CurrentMsgList.findMsg(h.seq, onProgress, result = { msg ->
-                isClicked = false
                 if (msg == null) { onFail(); return@findMsg }
+                done()
                 rv.safeSmoothToStart(CurrentMsgList.getMsgIndex(msg))
             })
         } else when {
             // Terminal first-unread stop, jumped the count-based way (no single msgSeq).
             lastUnreadMsg != null ->
                 CurrentMsgList.upwardMsg(CurrentMsgList.getMsgIndex(lastUnreadMsg!!), count, onProgress, onFail) {
-                    isClicked = false
+                    done()
                     rv.safeSmoothToStart(it)
                 }
             list.isNotEmpty() && count > 0 ->
                 CurrentMsgList.upwardMsg(list.size - 1, count - 1, onProgress, onFail) {
-                    isClicked = false
+                    done()
                     rv.safeSmoothToStart(it)
                 }
-            else -> isClicked = false
+            else -> done()
         }
     }
 
@@ -199,19 +230,38 @@ class 跳转第一条未读消息 : WatchAIOListVB() {
         RecentContacts.get(peerUid)?.let { recent ->
             Utils.log("unreadCntCached: ${recent.unreadCntCached}")
             if (recent.unreadCntCached > 0) {
-                val tv = add<TextView>()
-                    .layoutGravity(Gravity.RIGHT or Gravity.TOP)
-                    // Left corners rounded, right square so it sits flush to the screen edge (the right
-                    // semicircle is "hidden" by simply not rounding it) — no right margin needed.
-                    .background(roundCornerDrawable(M3.surfaceContainerHigh, 9999f, 0f, 9999f, 0f))
-                    .padding(6.dp)
+                val ctx = childView.context
+                // A circular progress sits to the LEFT of the count text; hidden until a jump is in
+                // flight (see SkipAction). 14dp reads clearly at watch DPI without crowding the label.
+                val spinner = M3CircularProgress(ctx).apply {
+                    indicatorColor = M3.primary
+                    visibility = View.GONE
+                }
+                val tv = TextView(ctx)
                     .textSize(12f)
                     .textColor(M3.primary)
-                // Only fix needed: clear the rich titlebar (which overlays the list from the very top
-                // in chat-only mode) / screen top — it was flush against it.
-                (tv.layoutParams as? FrameLayout.LayoutParams)?.topMargin =
-                    (if (Settings.enableTitlebar.value) Settings.titlebarHeight.value.toInt() + 12 else 10).dp
-                SkipAction(this@跳转第一条未读消息.H, tv, recent)
+                // The chip is now the rounded pill that holds [spinner][text] (the background moved off
+                // the TextView). Left corners rounded, right square so it sits flush to the screen edge.
+                val chip = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    background = roundCornerDrawable(M3.surfaceContainerHigh, 9999f, 0f, 9999f, 0f)
+                    setPadding(6.dp, 6.dp, 6.dp, 6.dp)
+                    addView(spinner, LinearLayout.LayoutParams(14.dp, 14.dp).apply { rightMargin = 4.dp })
+                    addView(tv, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                }
+                add(chip)
+                // FrameLayout.addView defaults to MATCH_PARENT — without WRAP the rounded pill balloons
+                // to fill the whole screen. Anchor it top-right at wrap size, clearing the rich titlebar
+                // (which overlays the list from the very top in chat-only mode) / screen top.
+                chip.layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    gravity = Gravity.RIGHT or Gravity.TOP
+                    topMargin = (if (Settings.enableTitlebar.value) Settings.titlebarHeight.value.toInt() + 12 else 10).dp
+                }
+                SkipAction(this@跳转第一条未读消息.H, chip, tv, spinner, recent)
             }
         }
     }.group
