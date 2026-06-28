@@ -15,6 +15,7 @@ import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.aio_cell.doAddFavEmoji
 import momoi.mod.qqpro.hook.menu.MsgCapabilities
+import momoi.mod.qqpro.hook.screenshot.ChatScreenshot
 import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.hook.view.PartialCopyFragment
 import momoi.mod.qqpro.util.Utils
@@ -57,6 +58,7 @@ val batchExecutors: Map<String, (View, List<WatchAIOMsgItem>) -> Unit> = mapOf(
             Utils.toast(ctx, "已收藏 ${files.size} 张")
         }
     },
+    "截图" to { v, items -> ChatScreenshot.capture(v, items.map { it.d.msgId }) },
     "翻译" to { _, items -> items.forEach { MessageTranslate.setManual(it.d, true) } },
     "隐藏翻译" to { _, items -> items.forEach { MessageTranslate.setManual(it.d, false) } },
     "撤回" to { v, items ->

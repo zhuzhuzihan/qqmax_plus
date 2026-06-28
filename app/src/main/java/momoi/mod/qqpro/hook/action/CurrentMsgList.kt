@@ -52,7 +52,15 @@ object CurrentMsgList {
      * during scroll/history-load, so indexOf into it intermittently misses (idx=-1) and breaks the
      * merge-header decision. Falls back to the mirror if the live list is unavailable.
      */
+    /**
+     * Temporary override for [prevMsg], used by the screenshot renderer so the merge-header decision is
+     * made relative to the SELECTED set (the first rendered message always shows its header) instead of
+     * the full live chat. Set only during a synchronous off-screen bind loop, then cleared.
+     */
+    var prevOverride: ((WatchAIOMsgItem) -> WatchAIOMsgItem?)? = null
+
     fun prevMsg(msg: WatchAIOMsgItem): WatchAIOMsgItem? {
+        prevOverride?.let { return it(msg) }
         runCatching {
             val live = uiOp?.m()
             if (live != null) {

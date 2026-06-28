@@ -446,6 +446,13 @@ class 设置页 : SettingsActivity() {
             switch("长按发送键翻译", "长按发送键把输入框内容翻译成发送语言(不发送)，翻译过程中输入框显示加载提示", Settings.translateSendButton)
             langSelector("发送语言", "长按发送键时把输入内容翻译成的目标语言", Settings.translateSendLang)
         },
+        SettingsCategory("聊天截图", "把选中的消息渲染成长图") {
+            switch("聊天截图", "在消息长按菜单与多选中显示“截图”，把选中的消息渲染成一张长图(预览后可保存/发送)", Settings.chatScreenshot)
+            switch("渲染标题栏与输入框", "截图顶部显示群名/对方名标题栏、底部显示空输入框装饰(仅群名，无圆角/未读)；关闭则只渲染消息", Settings.screenshotChrome)
+            switch("自己显示在左侧", "把自己发送的消息也渲染在左侧(第三方视角)；默认关闭(自己在右)", Settings.screenshotSelfAsOther)
+            switch("显示昵称与头像", "截图中显示真实昵称与头像；关闭则匿名化为 A/B/C 与随机色字母头像", Settings.screenshotShowIdentity)
+            switch("生成水印", "在截图底部添加“由 QQ Max 生成”水印", Settings.screenshotWatermark)
+        },
         SettingsCategory("关于与更新", "版本更新") {
             switch("自动检查更新", "启动时检查 QQ Max 新版本，可在关于页手动检查", Settings.autoUpdateCheck)
             actionCard("立即检查更新", "现在就检查 QQ Max 是否有新版本") {

@@ -378,6 +378,22 @@ object Settings {
     // sending). Default on.
     val translateSendButton = BooleanPref("translateSendButton", true)
 
+    // ===== 聊天截图 (by AILIFE) =====
+    // Show the "截图" entry in the message long-press menu and 消息多选 batch actions. Renders the
+    // selected message(s) into one tall image (preview → save/send). Default on.
+    val chatScreenshot = BooleanPref("chatScreenshot", true)
+    // Render a decorative titlebar (contact/group name only — no rounded corner / unread badge) at the
+    // top and an empty input-bar at the bottom of the screenshot. Default on.
+    val screenshotChrome = BooleanPref("screenshotChrome", true)
+    // Render your OWN messages on the LEFT (as a third party would see them) instead of the right.
+    // Default off.
+    val screenshotSelfAsOther = BooleanPref("screenshotSelfAsOther", false)
+    // Show real nicknames + avatars in the screenshot. Off = anonymize each sender to A/B/C with a
+    // random-colored letter avatar. Default on.
+    val screenshotShowIdentity = BooleanPref("screenshotShowIdentity", true)
+    // Add a "由 QQ Max 生成" watermark line at the bottom of the screenshot. Default on.
+    val screenshotWatermark = BooleanPref("screenshotWatermark", true)
+
     // ===== 调试 =====
     // Enable the main-thread hang watchdog (HangWatcher). When on, a stalled main thread for
     // 8s+ shows a "应用卡死" report. Crash capture is always on; this gates only hang detection,
@@ -429,6 +445,7 @@ object Settings {
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         translateMenuEntry, translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
+        chatScreenshot, screenshotChrome, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
         notifyVibrateMode, voiceBtnText, watchdogEnabled, enableLog,

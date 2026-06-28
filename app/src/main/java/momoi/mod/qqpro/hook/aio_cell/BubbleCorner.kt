@@ -68,6 +68,20 @@ object BubbleCorner {
         )
     }
 
+    /**
+     * Force the bubble fill to the color for [loc], even if our rounded drawable is already applied
+     * (normal [apply] short-circuits then). Keeps the current padding. Used by the screenshot renderer
+     * to re-theme a self bubble as the "other" side after [AIOCellGroupWidget.setLocation].
+     */
+    fun forceColor(widget: AIOCellGroupWidget, loc: Int) {
+        val wrapper = runCatching { widget.getLongClickWrapper<View>() }.getOrNull() ?: return
+        val r = Settings.bubbleCornerRadius.value.dpf
+        val pl = wrapper.paddingLeft; val pt = wrapper.paddingTop
+        val pr = wrapper.paddingRight; val pb = wrapper.paddingBottom
+        wrapper.background = roundCornerDrawable(resolvedBubbleColor(loc), r)
+        wrapper.setPadding(pl, pt, pr, pb)
+    }
+
     /** Sample the fill color by rendering the drawable to a small bitmap and reading its center. */
     private fun sampleColor(d: Drawable): Int {
         val w = d.intrinsicWidth.takeIf { it > 0 } ?: 40

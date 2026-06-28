@@ -57,6 +57,9 @@ object ChatMultiSelect {
     val selected = linkedSetOf<Long>()
 
     private var rvRef: WeakReference<RecyclerView>? = null
+    /** The live chat RecyclerView (captured on every cell bind), for features outside the list — e.g.
+     *  the screenshot renderer needs the adapter even when invoked from the long-press menu overlay. */
+    val recyclerView: RecyclerView? get() = rvRef?.get()
     /** The RV the touch-listener / decoration are currently installed on (install once per RV). */
     private var installedOn: WeakReference<RecyclerView>? = null
     /** Cell-root view → msgId, refreshed on every bind. Weak keys so recycled cells don't leak. */

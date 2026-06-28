@@ -26,6 +26,7 @@ import momoi.mod.qqpro.hook.action.SelfContact
 import momoi.mod.qqpro.hook.action.isGroup
 import momoi.mod.qqpro.hook.aio_cell.MarketFaceImage
 import momoi.mod.qqpro.hook.aio_cell.doAddFavEmoji
+import momoi.mod.qqpro.hook.screenshot.ChatScreenshot
 import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.hook.copyImageFileToClipboard
 import momoi.mod.qqpro.hook.copyImageToClipboard
@@ -186,6 +187,9 @@ suspend fun buildMessageActions(
         if (!isHistory && "HideTranslateText" in names) add(13, "隐藏翻译", MaterialSymbols.translate) { native("HideTranslateText") }
     }
     if (!isHistory && "SpeakText" in names) add(14, "朗读", MaterialSymbols.volume_up) { native("SpeakText") }
+    // 截图 — render this message into an image (long-press single; 消息多选 does the batch).
+    if (!isHistory && Settings.chatScreenshot.value && msg != null)
+        add(9, "截图", MaterialSymbols.image) { ChatScreenshot.capture(host, listOf(msg.msgId)) }
     // 15 删除 (local delete, live only) — red, last
     val deleteId = msg?.msgId
     if (!isHistory && deleteId != null && deleteId != 0L && msg != null)
