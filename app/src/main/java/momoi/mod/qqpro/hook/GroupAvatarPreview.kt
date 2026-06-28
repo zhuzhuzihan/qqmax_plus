@@ -10,6 +10,7 @@ import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.child
 import momoi.mod.qqpro.safeCacheDir
 import momoi.mod.qqpro.hook.view.addChatSearchEntry
+import momoi.mod.qqpro.hook.summarize.addSummaryHistoryEntry
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.util.runOnUi
 
@@ -24,6 +25,8 @@ class GroupAvatarPreview : SettingFrame() {
         super.onViewCreated(view, savedInstanceState)
         // 在右侧设置页(群聊与单聊都有)加入"搜索聊天记录"入口。
         addChatSearchEntry(this)
+        // 加入"总结历史"入口,查看本会话过往的聊天总结记录(任一总结功能开启时显示)。
+        addSummaryHistoryEntry(this)
         // 单聊设置页底部加入"TA的空间"入口,跳转该好友的QQ空间。
         addQzoneEntry(this)
         // 单聊设置页在原生性别/生日下方补充 年龄·星座·生肖 / 地区 / 签名(随增强资料卡开关)。

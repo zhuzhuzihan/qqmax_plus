@@ -262,6 +262,11 @@ class 跳转第一条未读消息 : WatchAIOListVB() {
                     topMargin = (if (Settings.enableTitlebar.value) Settings.titlebarHeight.value.toInt() + 12 else 10).dp
                 }
                 SkipAction(this@跳转第一条未读消息.H, chip, tv, spinner, recent)
+                // 未读超过 20 条时,在跳转气泡下方加入"总结未读"按钮(从第一条未读到末尾)。
+                if (Settings.summarizeUnreadButton.value && recent.unreadCntCached > 20) {
+                    val chipTop = (if (Settings.enableTitlebar.value) Settings.titlebarHeight.value.toInt() + 12 else 10).dp
+                    momoi.mod.qqpro.hook.summarize.addSummarizeUnreadButton(this.group as FrameLayout, chip, chipTop + 36.dp, recent.unreadCntCached)
+                }
             }
         }
     }.group

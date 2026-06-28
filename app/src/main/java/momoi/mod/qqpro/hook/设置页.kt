@@ -453,6 +453,12 @@ class 设置页 : SettingsActivity() {
             switch("显示昵称与头像", "截图中显示真实昵称与头像；关闭则匿名化为 A/B/C 与随机色字母头像", Settings.screenshotShowIdentity)
             switch("生成水印", "在截图底部添加“由 QQ Max 生成”水印", Settings.screenshotWatermark)
         },
+        SettingsCategory("聊天总结", "用 AI 总结聊天记录") {
+            switch("长按菜单总结", "在消息长按菜单与多选中显示“总结”；单条=从该消息到聊天末尾，多选=总结选中的消息", Settings.summarizeMenuEntry)
+            switch("总结未读消息", "未读超过 20 条时，在“↑X条新消息”气泡下方显示“总结未读”按钮，从第一条未读总结到末尾", Settings.summarizeUnreadButton)
+            selector("总结风格", "要点(Markdown列表)/一句话/详细", Settings.summarizeStyle, listOf("要点", "一句话", "详细"))
+            summarizeLangSelector("总结语言", "总结输出的语言；自动=跟随会话本身的语言。过往总结记录可在好友/群聊设置页的“总结历史”查看")
+        },
         SettingsCategory("关于与更新", "版本更新") {
             switch("自动检查更新", "启动时检查 QQ Max 新版本，可在关于页手动检查", Settings.autoUpdateCheck)
             actionCard("立即检查更新", "现在就检查 QQ Max 是否有新版本") {
@@ -598,6 +604,16 @@ class 设置页 : SettingsActivity() {
         selector(title, desc, names,
             current = { codes.indexOf(pref.value).coerceAtLeast(0) }) { which ->
             pref.value = codes[which]
+        }
+    }
+
+    /** Language picker for summaries: same codes as [langSelector] but with a leading "自动" (auto). */
+    private fun GroupScopeFix.summarizeLangSelector(title: String, desc: String) {
+        val codes = listOf("auto") + momoi.mod.qqpro.hook.translate.Translator.TARGETS.map { it.first }
+        val names = listOf("自动") + momoi.mod.qqpro.hook.translate.Translator.TARGETS.map { it.second }
+        selector(title, desc, names,
+            current = { codes.indexOf(Settings.summarizeLang.value).coerceAtLeast(0) }) { which ->
+            Settings.summarizeLang.value = codes[which]
         }
     }
 

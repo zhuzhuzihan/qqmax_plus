@@ -27,6 +27,9 @@ import momoi.mod.qqpro.hook.action.isGroup
 import momoi.mod.qqpro.hook.aio_cell.MarketFaceImage
 import momoi.mod.qqpro.hook.aio_cell.doAddFavEmoji
 import momoi.mod.qqpro.hook.screenshot.ChatScreenshot
+import momoi.mod.qqpro.hook.summarize.SummaryMessages
+import momoi.mod.qqpro.hook.summarize.SummaryStore
+import momoi.mod.qqpro.hook.summarize.SummaryViewer
 import momoi.mod.qqpro.hook.translate.HistoryTranslate
 import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.hook.copyImageFileToClipboard
@@ -204,6 +207,10 @@ suspend fun buildMessageActions(
     // 截图 — render this message into an image (long-press single; 消息多选 does the batch).
     if (!isHistory && Settings.chatScreenshot.value && msg != null)
         add(9, "截图", MaterialSymbols.image) { ChatScreenshot.capture(host, listOf(msg.msgId)) }
+    // 总结 — summarize from this message to the end of the chat (long-press single; 消息多选 does the
+    // batch over the selection). Live only.
+    if (!isHistory && Settings.summarizeMenuEntry.value && msg != null && msg.msgId != 0L)
+        add(13, "总结", MaterialSymbols.summarize) { summarizeFromMessage(msg, fm) }
     // 15 删除 (local delete, live only) — red, last
     val deleteId = msg?.msgId
     if (!isHistory && deleteId != null && deleteId != 0L && msg != null)
@@ -227,6 +234,24 @@ suspend fun buildMessageActions(
         }
 
     return out.sortedBy { it.order }
+}
+
+/**
+ * Summarize from [msg] to the end of the loaded chat. Slices [CurrentMsgList] from that message's
+ * index onward, builds the API message list, and opens a streaming [SummaryViewer]. Live only.
+ */
+private fun summarizeFromMessage(msg: MsgRecord, fm: FragmentManager?) {
+    if (fm == null) { Utils.log("summarize: no fragment manager"); return }
+    val list = CurrentMsgList.msgList.value
+    val idx = list.indexOfFirst { it.d.msgId == msg.msgId }
+    if (idx < 0) { Utils.log("summarize: message not in loaded list"); return }
+    val slice = list.subList(idx, list.size).toList()
+    val apiMsgs = SummaryMessages.from(slice)
+    if (apiMsgs.isEmpty()) { Utils.log("summarize: no text in range"); return }
+    val key = SummaryStore.keyOf(CurrentContact.chatType, CurrentContact.peerUid)
+    runCatching {
+        SummaryViewer.live(apiMsgs, "从此处 ${apiMsgs.size} 条", key).show(fm, "qqpro_summary")
+    }.onFailure { Utils.log("summarize: open failed: $it") }
 }
 
 /**

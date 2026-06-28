@@ -378,6 +378,22 @@ object Settings {
     // sending). Default on.
     val translateSendButton = BooleanPref("translateSendButton", true)
 
+    // ===== 聊天总结 (by AILIFE) =====
+    // Show a "总结" entry in the message long-press menu and 消息多选 batch actions. Single press
+    // summarizes from that message to the end of the chat; multi-select summarizes the selected
+    // messages. Default on.
+    val summarizeMenuEntry = BooleanPref("summarizeMenuEntry", true)
+    // Show a "总结未读" button next to the "↑ X条新消息" jump chip when unread count exceeds 20;
+    // tapping it summarizes from the first unread message to the end. Default on.
+    val summarizeUnreadButton = BooleanPref("summarizeUnreadButton", true)
+    // Summary output style: 0 = bullets (要点, Markdown default), 1 = tldr (一句话), 2 = detailed (详细).
+    val summarizeStyle = IntPref("summarizeStyle", 0)
+    // Summary output language (2-letter code, or "auto" to match the conversation's own language).
+    val summarizeLang = StringPref("summarizeLang", "auto")
+    // Stable per-install UUID for the summarization daily quota (X-User-ID). Generated lazily on first
+    // use (see Summarizer.userId) and persisted; blank means not yet generated.
+    val installUuid = StringPref("installUuid", "")
+
     // ===== 聊天截图 (by AILIFE) =====
     // Show the "截图" entry in the message long-press menu and 消息多选 batch actions. Renders the
     // selected message(s) into one tall image (preview → save/send). Default on.
