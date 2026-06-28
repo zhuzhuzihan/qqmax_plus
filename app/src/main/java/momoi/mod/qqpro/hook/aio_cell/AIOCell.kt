@@ -25,6 +25,7 @@ import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentGroupMembers
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.action.isGroup
+import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.lib.create
 import momoi.mod.qqpro.hook.parseAtMembers
 import momoi.mod.qqpro.util.linkify
@@ -405,6 +406,10 @@ object AIOCell {
                 LinkPreview.hide(widget)
             }
             PlusOneButton.bind(widget, item)
+            // Translate this text bubble (manual 翻译 entry or per-chat 翻译全部消息). No-op for
+            // non-text cells / when translation isn't requested. Runs last so the original text
+            // (set/linkified above) is the translation source and the result renders below/over it.
+            MessageTranslate.bind(widget, item)
         }
     }
 

@@ -38,6 +38,7 @@ import mqq.app.MobileQQ
 import java.io.File
 import java.lang.ref.WeakReference
 import momoi.mod.qqpro.lib.material.M3
+import momoi.mod.qqpro.lib.material.ButtonSpinner
 import momoi.mod.qqpro.lib.material.M3ProgressDrawable
 import momoi.mod.qqpro.lib.material.MaterialSymbol
 import momoi.mod.qqpro.lib.material.MaterialSymbols
@@ -389,21 +390,14 @@ object VoiceRecord {
         sttRunning = true
         onConvertStateChanged?.invoke()
         val btn = buttonRef?.get() ?: return
-        buttonIcon = btn.drawable
-        val spinner = M3ProgressDrawable()
-        btn.setImageDrawable(spinner)
-        spinner.setVisible(true, true)
+        ButtonSpinner.start(btn)
     }
 
     /** Restore the mic icon and re-enable presses; also resets any half-finished stream state. */
     private fun endStt() {
         sttRunning = false
         activeHost.endStreaming()
-        val btn = buttonRef?.get()
-        if (btn != null) {
-            (btn.drawable as? M3ProgressDrawable)?.setVisible(false, false)
-            buttonIcon?.let { btn.setImageDrawable(it) }
-        }
+        buttonRef?.get()?.let { ButtonSpinner.stop(it) }
         // Now that conversion is done, let the bar flip the mic → send button for the inserted text.
         onConvertStateChanged?.invoke()
     }

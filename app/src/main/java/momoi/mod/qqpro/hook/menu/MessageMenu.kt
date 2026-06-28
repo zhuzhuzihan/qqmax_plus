@@ -26,6 +26,7 @@ import momoi.mod.qqpro.hook.action.SelfContact
 import momoi.mod.qqpro.hook.action.isGroup
 import momoi.mod.qqpro.hook.aio_cell.MarketFaceImage
 import momoi.mod.qqpro.hook.aio_cell.doAddFavEmoji
+import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.hook.copyImageFileToClipboard
 import momoi.mod.qqpro.hook.copyImageToClipboard
 import momoi.mod.qqpro.hook.forwardMsgRecord
@@ -173,9 +174,17 @@ suspend fun buildMessageActions(
         picEl != null -> add(11, "保存", MaterialSymbols.download) { withPicFile(host, picEl) { f -> saveFileTo(host, f) } }
         caps.mfFile != null -> add(11, "保存", MaterialSymbols.download) { saveFileTo(host, caps.mfFile) }
     }
-    // 12-14 翻译 / 隐藏翻译 / 朗读 (native, live only)
-    if (!isHistory && "TranslateText" in names) add(12, "翻译", MaterialSymbols.translate) { native("TranslateText") }
-    if (!isHistory && "HideTranslateText" in names) add(13, "隐藏翻译", MaterialSymbols.translate) { native("HideTranslateText") }
+    // 12-14 翻译 / 隐藏翻译 / 朗读. Our own translate (ai-life endpoint) replaces QQ's native
+    // TranslateText for text messages when enabled; otherwise fall back to the native entries.
+    val ourTranslate = !isHistory && Settings.translateMenuEntry.value && msg != null && caps.fwdText != null
+    if (ourTranslate) {
+        val translateMsg = msg!!
+        val label = if (MessageTranslate.isManual(translateMsg.msgId)) "隐藏翻译" else "翻译"
+        add(12, label, MaterialSymbols.translate) { MessageTranslate.toggleManual(translateMsg) }
+    } else {
+        if (!isHistory && "TranslateText" in names) add(12, "翻译", MaterialSymbols.translate) { native("TranslateText") }
+        if (!isHistory && "HideTranslateText" in names) add(13, "隐藏翻译", MaterialSymbols.translate) { native("HideTranslateText") }
+    }
     if (!isHistory && "SpeakText" in names) add(14, "朗读", MaterialSymbols.volume_up) { native("SpeakText") }
     // 15 删除 (local delete, live only) — red, last
     val deleteId = msg?.msgId

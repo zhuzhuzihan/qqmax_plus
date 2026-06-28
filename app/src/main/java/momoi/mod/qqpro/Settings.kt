@@ -355,6 +355,29 @@ object Settings {
         }
     }
 
+    // ===== 翻译 (by AILIFE) =====
+    // Show a "翻译" entry in the chat long-press menu for messages that contain text. Tapping it
+    // translates that one message into translateViewLang (toggles back off with "隐藏翻译"). Default on.
+    val translateMenuEntry = BooleanPref("translateMenuEntry", true)
+    // Target language (2-letter API code) others' messages are translated into — the language you read
+    // in. Used by both the long-press 翻译 entry and the per-chat "翻译全部消息" auto-translate.
+    val translateViewLang = StringPref("translateViewLang", "zh")
+    // Target language your OWN typed text is translated into when you long-press the send button.
+    val translateSendLang = StringPref("translateSendLang", "en")
+    // Show the per-conversation "翻译全部消息" switch on the 好友/群聊 settings page. When that per-chat
+    // switch is on, every visible text message in that chat is auto-translated. Default on.
+    val translateShowAllSwitch = BooleanPref("translateShowAllSwitch", true)
+    // When "翻译全部消息" auto-translation is on for a chat, also translate your OWN messages. Default
+    // off (only translate the other side's messages). The manual long-press 翻译 always works on own
+    // messages regardless of this.
+    val translateOwnMessages = BooleanPref("translateOwnMessages", false)
+    // How a translated incoming message is shown: false (default) keeps the original and adds the
+    // translation below a divider; true replaces the bubble text with the translation in place.
+    val translateReplaceInPlace = BooleanPref("translateReplaceInPlace", false)
+    // Allow long-pressing the chat send button to translate the input into translateSendLang (without
+    // sending). Default on.
+    val translateSendButton = BooleanPref("translateSendButton", true)
+
     // ===== 调试 =====
     // Enable the main-thread hang watchdog (HangWatcher). When on, a stalled main thread for
     // 8s+ shows a "应用卡死" report. Crash capture is always on; this gates only hang detection,
@@ -405,6 +428,7 @@ object Settings {
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
+        translateMenuEntry, translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
         notifyVibrateMode, voiceBtnText, watchdogEnabled, enableLog,

@@ -23,6 +23,7 @@ import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.asGroupOrNull
 import momoi.mod.qqpro.hook.contact.ProfileNameView
+import momoi.mod.qqpro.hook.translate.TranslateAll
 import momoi.mod.qqpro.findAll
 import momoi.mod.qqpro.forEachAll
 import momoi.mod.qqpro.lib.dp
@@ -337,6 +338,13 @@ class FriendSettingMargins : FriendSettingFragment() {
         Utils.log("CardMarginUnify: friend settings normalized")
         return root
     }
+
+    // Inject the per-chat "翻译全部消息" switch. Done in onViewCreated (after Y's M3 rebuild has wired
+    // up its late-injection harvester) so the added native switch row is picked up into the M3 list.
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        if (Settings.translateShowAllSwitch.value) TranslateAll.inject(view)
+    }
 }
 
 /** Group settings (群聊设置): switch-option cards. */
@@ -350,6 +358,12 @@ class GroupSettingMargins : TroopSettingFragment() {
         (root as? ViewGroup)?.normalizeListCards()
         Utils.log("CardMarginUnify: group settings normalized")
         return root
+    }
+
+    // Inject the per-chat "翻译全部消息" switch (see FriendSettingMargins.onViewCreated).
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        if (Settings.translateShowAllSwitch.value) TranslateAll.inject(view)
     }
 }
 

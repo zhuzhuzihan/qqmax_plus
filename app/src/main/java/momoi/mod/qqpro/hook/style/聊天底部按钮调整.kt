@@ -38,6 +38,7 @@ import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentGroupMembers
 import momoi.mod.qqpro.hook.action.SelfContact
 import momoi.mod.qqpro.hook.action.isGroup
+import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.lib.FILL
 import momoi.mod.qqpro.lib.ImeEditText
 import momoi.mod.qqpro.lib.GroupScope
@@ -393,6 +394,11 @@ class 聊天底部按钮调整() : `InputBarController$inputContent$2`() {
                         send.clickable {
                             if (Settings.fullInlineInput.value) InlineInput.send()
                             else sendInline(editText)
+                        }
+                        // Long-press the send button to translate the input (into 发送语言) without
+                        // sending; the field shows a 翻译中… placeholder while in flight.
+                        if (Settings.translateSendButton.value) {
+                            send.longClickable { MessageTranslate.translateInput(editText, send) }
                         }
                         // Mic/send/emoji button visibility for the current text. Extracted so it can
                         // also be re-run when voice-to-text conversion finishes (see below).

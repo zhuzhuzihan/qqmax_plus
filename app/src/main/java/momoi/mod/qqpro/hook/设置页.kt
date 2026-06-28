@@ -437,6 +437,15 @@ class 设置页 : SettingsActivity() {
             colorPicker("链接颜色", "可点击链接/号码/@成员的文字颜色，留空为默认", Settings.linkColor, MaterialColors.ACCENT,
                 { M3.parseColorOrNull(Settings.linkColor.value) ?: M3.primary })
         },
+        SettingsCategory("翻译", "消息翻译与发送翻译") {
+            switch("长按菜单翻译", "在消息长按菜单中显示“翻译”，仅对含文字的消息显示；点按把该条消息翻译成查看语言，再点“隐藏翻译”还原", Settings.translateMenuEntry)
+            langSelector("查看语言", "把对方消息翻译成的目标语言", Settings.translateViewLang)
+            switch("对方消息原地替换", "翻译对方消息时直接用译文替换原文；关闭(默认)则保留原文，在其下方用分隔线显示译文", Settings.translateReplaceInPlace)
+            switch("显示“翻译全部”开关", "在好友/群聊设置页显示“翻译全部消息”开关，可逐会话开启：开启后该会话内所有可见文字消息自动翻译成查看语言(重进设置页生效)", Settings.translateShowAllSwitch)
+            switch("翻译全部时包含自己", "“翻译全部消息”开启时是否也翻译自己发送的消息；关闭(默认)只翻译对方消息(长按翻译不受影响)", Settings.translateOwnMessages)
+            switch("长按发送键翻译", "长按发送键把输入框内容翻译成发送语言(不发送)，翻译过程中输入框显示加载提示", Settings.translateSendButton)
+            langSelector("发送语言", "长按发送键时把输入内容翻译成的目标语言", Settings.translateSendLang)
+        },
         SettingsCategory("关于与更新", "版本更新") {
             switch("自动检查更新", "启动时检查 QQ Max 新版本，可在关于页手动检查", Settings.autoUpdateCheck)
             actionCard("立即检查更新", "现在就检查 QQ Max 是否有新版本") {
@@ -568,6 +577,20 @@ class 设置页 : SettingsActivity() {
                 onPick(which)
                 valueLabel.text = selectorLabel(options, current())
             }
+        }
+    }
+
+    /** Language picker backed by a [StringPref] holding the API language code (maps code ↔ index). */
+    private fun GroupScopeFix.langSelector(
+        title: String,
+        desc: String,
+        pref: Pref<String>,
+    ) {
+        val codes = momoi.mod.qqpro.hook.translate.Translator.TARGETS.map { it.first }
+        val names = momoi.mod.qqpro.hook.translate.Translator.TARGETS.map { it.second }
+        selector(title, desc, names,
+            current = { codes.indexOf(pref.value).coerceAtLeast(0) }) { which ->
+            pref.value = codes[which]
         }
     }
 

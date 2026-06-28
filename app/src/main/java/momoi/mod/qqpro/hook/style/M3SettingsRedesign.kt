@@ -121,6 +121,7 @@ private fun iconPathForTitle(title: String): String? = with(MaterialSymbols) {
         title.contains("二维码") && title.contains("扫") -> qr_code_scanner
         title.contains("扫") -> qr_code_scanner
         title.contains("二维码") -> qr_code
+        title.contains("翻译") -> translate
         title.contains("公告") -> campaign
         title.contains("搜索") || title.contains("查找") -> search
         title.contains("空间") || title.contains("动态") || title.contains("说说") -> star
