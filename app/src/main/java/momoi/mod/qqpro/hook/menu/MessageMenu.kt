@@ -27,6 +27,7 @@ import momoi.mod.qqpro.hook.action.isGroup
 import momoi.mod.qqpro.hook.aio_cell.MarketFaceImage
 import momoi.mod.qqpro.hook.aio_cell.doAddFavEmoji
 import momoi.mod.qqpro.hook.screenshot.ChatScreenshot
+import momoi.mod.qqpro.hook.translate.HistoryTranslate
 import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.hook.copyImageFileToClipboard
 import momoi.mod.qqpro.hook.copyImageToClipboard
@@ -93,6 +94,7 @@ class MsgCapabilities(val msg: MsgRecord?, val msgItem: WatchAIOMsgItem?) {
             it.pttElement != null || it.picElement != null || it.giphyElement != null ||
             it.faceBubbleElement != null
     } == true
+    val hasPtt = msg?.elements?.any { it.pttElement != null } == true
     val hasPic = msg?.elements?.any { it.picElement != null } == true
     val pressedEl = msg?.let { PressedImage.elementFor(it.msgId) }?.takeIf { it.picElement != null }
     val picCount = msg?.elements?.count { it.picElement != null } ?: 0
@@ -178,10 +180,22 @@ suspend fun buildMessageActions(
     // 12-14 翻译 / 隐藏翻译 / 朗读. Our own translate (ai-life endpoint) replaces QQ's native
     // TranslateText for text messages when enabled; otherwise fall back to the native entries.
     val ourTranslate = !isHistory && Settings.translateMenuEntry.value && msg != null && caps.fwdText != null
-    if (ourTranslate) {
+    // History (合并转发) text bubbles have no live cell, so translation renders into the forward
+    // viewer's own registered TextView via [HistoryTranslate] instead of [MessageTranslate].
+    val historyTranslate = isHistory && Settings.translateMenuEntry.value && msg != null &&
+        caps.fwdText != null && HistoryTranslate.has(msg.msgId)
+    if (historyTranslate) {
+        val id = msg!!.msgId
+        val label = if (HistoryTranslate.isOn(id)) "隐藏翻译" else "翻译"
+        add(12, label, MaterialSymbols.translate) { HistoryTranslate.toggle(id) }
+    } else if (ourTranslate) {
         val translateMsg = msg!!
         val label = if (MessageTranslate.isManual(translateMsg.msgId)) "隐藏翻译" else "翻译"
         add(12, label, MaterialSymbols.translate) { MessageTranslate.toggleManual(translateMsg) }
+    } else if (caps.hasPtt) {
+        // For voice messages QQ reuses the TranslateText item as 语音转文字 (speech-to-text).
+        if (!isHistory && "TranslateText" in names) add(12, "转文字", MaterialSymbols.record_voice_over) { native("TranslateText") }
+        if (!isHistory && "HideTranslateText" in names) add(13, "隐藏文字", MaterialSymbols.record_voice_over) { native("HideTranslateText") }
     } else {
         if (!isHistory && "TranslateText" in names) add(12, "翻译", MaterialSymbols.translate) { native("TranslateText") }
         if (!isHistory && "HideTranslateText" in names) add(13, "隐藏翻译", MaterialSymbols.translate) { native("HideTranslateText") }

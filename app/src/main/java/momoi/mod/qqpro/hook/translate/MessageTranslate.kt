@@ -65,6 +65,29 @@ object MessageTranslate {
         if (w != null && boundMsg[w] == id) render(w, msg)
     }
 
+    /**
+     * Translate [base] (an already-built display text) into the view language and render the result
+     * INTO [content] inline — loader → result / failure — exactly like an in-chat bubble. For surfaces
+     * that have no live [AIOCellGroupWidget] (the 合并转发 history viewer); see [HistoryTranslate]. The
+     * caller owns [content]'s lifecycle, so there's no recycle bookkeeping here — it just renders once.
+     */
+    fun translateInto(content: TextView, base: CharSequence) {
+        val src = base.toString().trim()
+        if (src.isEmpty()) return
+        val target = Settings.translateViewLang.value
+        val replace = Settings.translateReplaceInPlace.value
+        val key = "$target $src"
+        cache[key]?.let { applyResult(content, base, it, replace); return }
+        applyExtra(content, base, "翻译中…", M3.onSurfaceVariant)
+        Translator.translate(src, target) { result ->
+            runOnUi {
+                if (result != null) cache[key] = result
+                if (result != null) applyResult(content, base, result, replace)
+                else applyExtra(content, base, "翻译失败", M3.error)
+            }
+        }
+    }
+
     /** Entry point from the cell bind (AIOCell.HookCell.i). */
     fun bind(widget: AIOCellGroupWidget, item: WatchAIOMsgItem) {
         runCatching { render(widget, item.d) }

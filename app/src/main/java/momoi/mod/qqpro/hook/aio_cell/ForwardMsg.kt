@@ -48,6 +48,7 @@ import momoi.mod.qqpro.hook.action.SelfContact
 import momoi.mod.qqpro.hook.forwardText
 import momoi.mod.qqpro.hook.forwardToFriends
 import momoi.mod.qqpro.hook.style.MyImageView
+import momoi.mod.qqpro.hook.translate.HistoryTranslate
 import momoi.mod.qqpro.hook.view.MyDialogFragment
 import momoi.mod.qqpro.hook.view.smoothScrollToStart
 import momoi.mod.qqpro.lib.applyLongScreenshotFit
@@ -455,7 +456,7 @@ class DetailFragment(private val contact: Contact, private val data: ForwardMsgD
                                                 MsgUtil.summary(textElements),
                                                 Settings.chatScale.value
                                             )
-                                            add<TextView>()
+                                            val textView = add<TextView>()
                                                 .textSize(14f * Settings.chatScale.value)
                                                 .textColor(msgTextColor)
                                                 .text(summary)
@@ -476,6 +477,9 @@ class DetailFragment(private val contact: Contact, private val data: ForwardMsgD
                                                     }
                                                 }
                                                 .apply { linkify() }
+                                            // Register for the 翻译 long-press entry (history path has no
+                                            // live cell; translation renders into this TextView).
+                                            HistoryTranslate.register(msg.msgId, textView, summary)
                                             LinkPreview.bindHistory(group, summary)
                                             textElements.clear()
                                         }
