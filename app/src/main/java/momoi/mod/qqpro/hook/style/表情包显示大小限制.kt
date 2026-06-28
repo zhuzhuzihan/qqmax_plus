@@ -47,7 +47,16 @@ class 表情包显示大小限制(context: Context) : RoundBubbleImageView(conte
             setMeasuredDimension(w.coerceAtLeast(1), h.coerceAtLeast(1))
             return
         }
-        // No drawable yet (still loading): fall back to native sizing.
+        // No drawable yet (still loading, e.g. an undownloaded video thumbnail):
+        // fall back to native sizing, but still cap the height at heightLimit so the
+        // placeholder doesn't blow past the configured max (scaling width to keep aspect).
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        val cap = heightLimit.toInt()
+        val mh = measuredHeight
+        if (mh > cap) {
+            val mw = measuredWidth
+            val w = if (mh > 0) (mw.toFloat() * cap / mh).toInt() else mw
+            setMeasuredDimension(w.coerceAtLeast(1), cap.coerceAtLeast(1))
+        }
     }
 }
