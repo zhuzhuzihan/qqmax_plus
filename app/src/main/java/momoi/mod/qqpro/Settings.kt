@@ -62,9 +62,6 @@ object Settings {
     // Group chat avatar size, as a multiple of the nickname text size. Default 2.5x.
     val avatarSizeScale = FloatPref("avatarSizeScale", 2.5f)
     val hideRepeatedSender = BooleanPref("hideRepeatedSender", true)
-    // 消息多选: show a "多选" entry in the chat long-press menu to enter multi-select mode (tap
-    // messages to select). Off by default.
-    val chatMultiSelect = BooleanPref("chatMultiSelect", false)
     // Show a "+1" pill on the latest message when it repeats the previous one (tap to send it again).
     val plusOneButton = BooleanPref("plusOneButton", true)
     // Replace the group message sender NAME with our resolved 群名片/备注/昵称. Off by default:
@@ -131,6 +128,13 @@ object Settings {
     // Material style for the chat long-press menu (M3 symbols + accent + one surface card). Off uses
     // semi-transparent dark rows with white text (the "material disabled" look of the + menu).
     val materialLongPressMenu = BooleanPref("materialLongPressMenu", true)
+    // Customized order + visibility of the chat message long-press menu and the "+" attachment menu,
+    // edited in the 菜单自定义 settings screen (drag to reorder; drag below the separator to hide).
+    // Format: "visibleKey,visibleKey,…|hiddenKey,hiddenKey,…" — blank = every item shown in the
+    // default order. See momoi.mod.qqpro.hook.menu.MenuConfig. This replaced the old per-feature
+    // show/hide toggles (长按菜单翻译 / 长按菜单总结 / 聊天截图 / 消息多选).
+    val longPressMenuOrder = StringPref("longPressMenuOrder", "")
+    val attachmentMenuOrder = StringPref("attachmentMenuOrder", "")
     // Rich chat titlebar: replaces the top page-indicator strip with a bar holding a back
     // button, the indicator dots, other-chats unread count, group member count and the
     // group/contact name. titlebarHeight (dp) defaults to the current strip height (16).
@@ -356,9 +360,7 @@ object Settings {
     }
 
     // ===== 翻译 (by AILIFE) =====
-    // Show a "翻译" entry in the chat long-press menu for messages that contain text. Tapping it
-    // translates that one message into translateViewLang (toggles back off with "隐藏翻译"). Default on.
-    val translateMenuEntry = BooleanPref("translateMenuEntry", true)
+    // The long-press "翻译" entry's visibility now lives in 菜单自定义 ([longPressMenuOrder]).
     // Target language (2-letter API code) others' messages are translated into — the language you read
     // in. Used by both the long-press 翻译 entry and the per-chat "翻译全部消息" auto-translate.
     val translateViewLang = StringPref("translateViewLang", "zh")
@@ -379,10 +381,7 @@ object Settings {
     val translateSendButton = BooleanPref("translateSendButton", true)
 
     // ===== 聊天总结 (by AILIFE) =====
-    // Show a "总结" entry in the message long-press menu and 消息多选 batch actions. Single press
-    // summarizes from that message to the end of the chat; multi-select summarizes the selected
-    // messages. Default on.
-    val summarizeMenuEntry = BooleanPref("summarizeMenuEntry", true)
+    // The long-press "总结" entry's visibility now lives in 菜单自定义 ([longPressMenuOrder]).
     // Show a "总结未读" button next to the "↑ X条新消息" jump chip when unread count exceeds 20;
     // tapping it summarizes from the first unread message to the end. Default on.
     val summarizeUnreadButton = BooleanPref("summarizeUnreadButton", true)
@@ -395,9 +394,8 @@ object Settings {
     val installUuid = StringPref("installUuid", "")
 
     // ===== 聊天截图 (by AILIFE) =====
-    // Show the "截图" entry in the message long-press menu and 消息多选 batch actions. Renders the
-    // selected message(s) into one tall image (preview → save/send). Default on.
-    val chatScreenshot = BooleanPref("chatScreenshot", true)
+    // The "截图" entry's visibility now lives in 菜单自定义 ([longPressMenuOrder]). The options below
+    // tune how the rendered screenshot looks.
     // Render a decorative titlebar (contact/group name only — no rounded corner / unread badge) at the
     // top and an empty input-bar at the bottom of the screenshot. Default on.
     val screenshotChrome = BooleanPref("screenshotChrome", true)
@@ -454,14 +452,14 @@ object Settings {
         showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, plusOneButton, replaceGroupNick, showMemberLevel, inlineSendButton,
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
-        hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
+        hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
-        translateMenuEntry, translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
-        chatScreenshot, screenshotChrome, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
+        translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
+        screenshotChrome, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
         notifyVibrateMode, voiceBtnText, watchdogEnabled, enableLog,

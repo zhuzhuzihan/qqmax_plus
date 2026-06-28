@@ -48,6 +48,7 @@ import momoi.mod.qqpro.lib.material.showColorPicker
 import momoi.mod.qqpro.hook.view.buildAboutView
 import momoi.mod.qqpro.ota.OTAManager2
 import momoi.mod.qqpro.StyleChooserActivity
+import momoi.mod.qqpro.MenuEditorActivity
 import momoi.mod.qqpro.lib.height
 import momoi.mod.qqpro.lib.margin
 import momoi.mod.qqpro.lib.onCheckedChange
@@ -315,6 +316,17 @@ class 设置页 : SettingsActivity() {
             switch("使用增强资料卡", "用全新 Material 风格资料卡替换原资料页，额外显示年龄/生日/星座/地区/签名(从内核获取)，关闭则保留原页面(重进资料页生效)", Settings.useRichProfile)
             switch("Material 设置页面", "把自我页(主页第4页)、好友/群聊设置页重绘为全新 Material 风格(头部卡片+M3列表+主题色开关)，并把改群名/备注/昵称改为 Material 输入弹窗，不再打开全屏键盘页(重进对应页面生效)", Settings.useM3Settings)
         },
+        SettingsCategory("菜单自定义", "长按菜单与附件菜单的排序与显示") {
+            section("自定义菜单", "拖动左侧手柄排序；拖到分隔线下方的项目将不再显示。例如可隐藏“翻译/截图/总结/多选”等。")
+            actionCard("长按消息菜单", "排序/显示 回复·复制·撤回·转发·翻译·截图·总结·多选·删除 等") {
+                startActivity(Intent(this@设置页, MenuEditorActivity::class.java)
+                    .putExtra(MenuEditorActivity.EXTRA_MENU, MenuEditorActivity.MENU_LONGPRESS))
+            }
+            actionCard("附件「+」菜单", "排序/显示 表情·贴纸·艾特·相册·拍照·录像·音频·通话 等") {
+                startActivity(Intent(this@设置页, MenuEditorActivity::class.java)
+                    .putExtra(MenuEditorActivity.EXTRA_MENU, MenuEditorActivity.MENU_ATTACHMENT))
+            }
+        },
         SettingsCategory("聊天输入", "输入框、发送方式与表情") {
             switch("聊天页直接输入", "在聊天页用输入框替换键盘键，有文字时麦克风键变发送键", Settings.inlineChatInput)
             switch("完全行内输入", "彻底不打开输入法页面：@、图片、回复、编辑、语音转文字都在输入框内完成。@xxx 与 [图片] 整体删除，回复/编辑在输入框上方显示横幅可点击取消(需开启“聊天页直接输入”)", Settings.fullInlineInput)
@@ -352,7 +364,6 @@ class 设置页 : SettingsActivity() {
             slider("聊天文本缩放", "聊天气泡内文字大小", Settings.chatScale)
             slider("图片最大高度", "聊天图片最大显示高度(占屏幕高度比例)，默认 0.5", Settings.picMaxHeightRatio, min = 0.3f, max = 1f)
             switch("长截图支持", "查看大图时，若图片高度≥屏幕2倍(长截图)，默认按屏幕宽度铺满并定位到顶部，可上下滚动阅读；双击循环缩放：1档整图高度·2档铺满宽度·3档进一步放大", Settings.longScreenshot)
-            switch("消息多选", "长按消息菜单出现“多选”，进入后点按消息勾选，底部显示已选数量(后续将支持批量操作)", Settings.chatMultiSelect)
             slider("气泡圆角半径", "聊天气泡、合并转发/聊天记录块与回复块的圆角半径(dp)", Settings.bubbleCornerRadius, min = 0f, max = 24f)
             colorPicker("我的气泡颜色", "留空为材料色", Settings.bubbleColorSelf, MaterialColors.ACCENT,
                 { M3.parseColorOrNull(Settings.bubbleColorSelf.value) ?: M3.primary })
@@ -438,7 +449,6 @@ class 设置页 : SettingsActivity() {
                 { M3.parseColorOrNull(Settings.linkColor.value) ?: M3.primary })
         },
         SettingsCategory("翻译", "消息翻译与发送翻译") {
-            switch("长按菜单翻译", "在消息长按菜单中显示“翻译”，仅对含文字的消息显示；点按把该条消息翻译成查看语言，再点“隐藏翻译”还原", Settings.translateMenuEntry)
             langSelector("查看语言", "把对方消息翻译成的目标语言", Settings.translateViewLang)
             switch("对方消息原地替换", "翻译对方消息时直接用译文替换原文；关闭(默认)则保留原文，在其下方用分隔线显示译文", Settings.translateReplaceInPlace)
             switch("显示“翻译全部”开关", "在好友/群聊设置页显示“翻译全部消息”开关，可逐会话开启：开启后该会话内所有可见文字消息自动翻译成查看语言(重进设置页生效)", Settings.translateShowAllSwitch)
@@ -447,14 +457,14 @@ class 设置页 : SettingsActivity() {
             langSelector("发送语言", "长按发送键时把输入内容翻译成的目标语言", Settings.translateSendLang)
         },
         SettingsCategory("聊天截图", "把选中的消息渲染成长图") {
-            switch("聊天截图", "在消息长按菜单与多选中显示“截图”，把选中的消息渲染成一张长图(预览后可保存/发送)", Settings.chatScreenshot)
+            section("聊天截图", "在「菜单自定义 › 长按消息菜单」可显示/隐藏“截图”项。以下选项调整渲染出的长图样式。")
             switch("渲染标题栏与输入框", "截图顶部显示群名/对方名标题栏、底部显示空输入框装饰(仅群名，无圆角/未读)；关闭则只渲染消息", Settings.screenshotChrome)
             switch("自己显示在左侧", "把自己发送的消息也渲染在左侧(第三方视角)；默认关闭(自己在右)", Settings.screenshotSelfAsOther)
             switch("显示昵称与头像", "截图中显示真实昵称与头像；关闭则匿名化为 A/B/C 与随机色字母头像", Settings.screenshotShowIdentity)
             switch("生成水印", "在截图底部添加“由 QQ Max 生成”水印", Settings.screenshotWatermark)
         },
         SettingsCategory("聊天总结", "用 AI 总结聊天记录") {
-            switch("长按菜单总结", "在消息长按菜单与多选中显示“总结”；单条=从该消息到聊天末尾，多选=总结选中的消息", Settings.summarizeMenuEntry)
+            section("聊天总结", "在「菜单自定义 › 长按消息菜单」可显示/隐藏“总结”项。以下选项调整总结的风格与语言。")
             switch("总结未读消息", "未读超过 20 条时，在“↑X条新消息”气泡下方显示“总结未读”按钮，从第一条未读总结到末尾", Settings.summarizeUnreadButton)
             selector("总结风格", "要点(Markdown列表)/一句话/详细", Settings.summarizeStyle, listOf("要点", "一句话", "详细"))
             summarizeLangSelector("总结语言", "总结输出的语言；自动=跟随会话本身的语言。过往总结记录可在好友/群聊设置页的“总结历史”查看")

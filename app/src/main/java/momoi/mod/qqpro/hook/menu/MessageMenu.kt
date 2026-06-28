@@ -14,7 +14,6 @@ import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import WatchPicElementExtKt
 import download
 import momoi.mod.qqpro.MsgUtil
-import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.child
 import momoi.mod.qqpro.hook.ChatMultiSelect
 import momoi.mod.qqpro.hook.PressedImage
@@ -65,9 +64,12 @@ import java.io.File
  * multi-select), so the list is identical in both contexts.
  */
 
-/** One menu action. Public so both the menu and multi-select share the same model. */
+/**
+ * One menu action. Public so both the menu and multi-select share the same model. [key] is the
+ * stable identity used by [MenuConfig] for the user's custom order/visibility (see [LongPressMenuConfig]).
+ */
 class Entry(
-    val order: Int,
+    val key: String,
     val label: String,
     val symbol: String,
     val destructive: Boolean,
@@ -128,93 +130,95 @@ suspend fun buildMessageActions(
 ): List<Entry> {
     val caps = MsgCapabilities(msg, msgItem)
     val out = ArrayList<Entry>()
-    fun add(order: Int, label: String, symbol: String, destructive: Boolean = false, action: () -> Unit) =
-        out.add(Entry(order, label, symbol, destructive, action))
+    fun add(key: String, label: String, symbol: String, destructive: Boolean = false, action: () -> Unit) =
+        out.add(Entry(key, label, symbol, destructive, action))
 
-    // 1 回复 (native, live only)
-    if (!isHistory && "ReplyMsg" in names) add(1, "回复", MaterialSymbols.reply) { native("ReplyMsg") }
-    // 2 复制 (our own copy when we have the text; else native CopyMsg)
+    // Each action is keyed by its [MenuItemSpec.key]; the final order/visibility is decided by the
+    // user's 菜单自定义 config ([LongPressMenuConfig]) below, not by the order we add them here.
+    // 回复 (native, live only)
+    if (!isHistory && "ReplyMsg" in names) add("reply", "回复", MaterialSymbols.reply) { native("ReplyMsg") }
+    // 复制 (our own copy when we have the text; else native CopyMsg)
     val copyText = caps.copyText
-    if (copyText != null) add(2, "复制", MaterialSymbols.content_copy) { Utils.copyToClipboard(host.context, copyText) }
-    else if ("CopyMsg" in names) add(2, "复制", MaterialSymbols.content_copy) { native("CopyMsg") }
-    // 3 撤回 — recall via kernel, gated on awaited eligibility (own / owner / admin-on-others). Red.
+    if (copyText != null) add("copy", "复制", MaterialSymbols.content_copy) { Utils.copyToClipboard(host.context, copyText) }
+    else if ("CopyMsg" in names) add("copy", "复制", MaterialSymbols.content_copy) { native("CopyMsg") }
+    // 撤回 — recall via kernel, gated on awaited eligibility (own / owner / admin-on-others). Red.
     if (!isHistory && msg != null && msg.msgId != 0L && recallEligible(msg))
-        add(3, "撤回", MaterialSymbols.undo, destructive = true) {
+        add("recall", "撤回", MaterialSymbols.undo, destructive = true) {
             runCatching { KernelServiceUtil.c()?.recallMsg(CurrentContact, msg.msgId, null) }
                 .onFailure { Utils.log("menu recall failed: $it") }
         }
-    // 4 编辑 (own text message)
+    // 编辑 (own text message)
     if (!isHistory && caps.isSelf && msg != null && caps.fwdText != null)
-        add(4, "编辑", MaterialSymbols.edit) { MessageEdit.beginFull(msg) }
-    // 5 部分复制 (text or ark)
-    if (copyText != null && fm != null) add(5, "部分复制", MaterialSymbols.content_copy) {
+        add("edit", "编辑", MaterialSymbols.edit) { MessageEdit.beginFull(msg) }
+    // 部分复制 (text or ark)
+    if (copyText != null && fm != null) add("partial_copy", "部分复制", MaterialSymbols.content_copy) {
         runCatching { PartialCopyFragment(copyText).show(fm, "qqpro_partial_copy") }
     }
-    // 6 复制图片
-    if (caps.hasPic && msg != null) add(6, "复制图片", MaterialSymbols.image) { host.copyImageToClipboard(msg, msgItem, caps.pressedEl) }
-    else if (caps.mfFile != null) add(6, "复制图片", MaterialSymbols.image) { host.copyImageFileToClipboard(caps.mfFile) }
-    // 7 转发
-    if (msg != null && (caps.fwdText != null || caps.forwardable)) add(7, "转发", MaterialSymbols.forward) {
+    // 复制图片
+    if (caps.hasPic && msg != null) add("copy_image", "复制图片", MaterialSymbols.image) { host.copyImageToClipboard(msg, msgItem, caps.pressedEl) }
+    else if (caps.mfFile != null) add("copy_image", "复制图片", MaterialSymbols.image) { host.copyImageFileToClipboard(caps.mfFile) }
+    // 转发
+    if (msg != null && (caps.fwdText != null || caps.forwardable)) add("forward", "转发", MaterialSymbols.forward) {
         if (caps.forwardable) host.forwardMsgRecord(msg, msgItem) else if (caps.fwdText != null) host.forwardText(caps.fwdText)
     }
-    // 8 复读 (resend whole message; not ark/file/combined; live only)
+    // 复读 (resend whole message; not ark/file/combined; live only)
     if (!isHistory && msg != null && (caps.forwardable || caps.fwdText != null) && !caps.isArk)
-        add(8, "复读", MaterialSymbols.repeat) { repeatMsgRecord(msg, msgItem) }
-    // 8 多选 (enter multi-select; ties with 复读, stable sort keeps it just below)
-    if (!isHistory && Settings.chatMultiSelect.value && msg != null && msg.msgId != 0L)
-        add(8, "多选", MaterialSymbols.check) { ChatMultiSelect.enter(msg.msgId) }
-    // 9 系统分享
-    if (caps.mfFile != null) add(9, "系统分享", MaterialSymbols.send) { host.shareImageFile(caps.mfFile) }
-    else if (msg != null && (caps.fwdText != null || caps.hasShareableMedia)) add(9, "系统分享", MaterialSymbols.send) { host.shareMessage(msg, msgItem) }
-    // 10 收藏 / 11 保存 (native dispatch when the cell offers it; else our own for in-bubble pic/marketface)
+        add("repeat", "复读", MaterialSymbols.repeat) { repeatMsgRecord(msg, msgItem) }
+    // 多选 (enter multi-select)
+    if (!isHistory && msg != null && msg.msgId != 0L)
+        add("multiselect", "多选", MaterialSymbols.check) { ChatMultiSelect.enter(msg.msgId) }
+    // 系统分享
+    if (caps.mfFile != null) add("share", "系统分享", MaterialSymbols.send) { host.shareImageFile(caps.mfFile) }
+    else if (msg != null && (caps.fwdText != null || caps.hasShareableMedia)) add("share", "系统分享", MaterialSymbols.send) { host.shareMessage(msg, msgItem) }
+    // 收藏 / 保存 (native dispatch when the cell offers it; else our own for in-bubble pic/marketface)
     val picEl = caps.picEl
     when {
-        caps.ownPicSave -> add(10, "收藏", MaterialSymbols.star) { withPicFile(host, picEl!!) { f -> doAddFavEmoji(host.context, f) } }
-        "SaveFavEmoji" in names -> add(10, "收藏", MaterialSymbols.star) { native("SaveFavEmoji") }
-        picEl != null -> add(10, "收藏", MaterialSymbols.star) { withPicFile(host, picEl) { f -> doAddFavEmoji(host.context, f) } }
-        caps.mfFile != null -> add(10, "收藏", MaterialSymbols.star) { doAddFavEmoji(host.context, caps.mfFile) }
+        caps.ownPicSave -> add("fav", "收藏", MaterialSymbols.star) { withPicFile(host, picEl!!) { f -> doAddFavEmoji(host.context, f) } }
+        "SaveFavEmoji" in names -> add("fav", "收藏", MaterialSymbols.star) { native("SaveFavEmoji") }
+        picEl != null -> add("fav", "收藏", MaterialSymbols.star) { withPicFile(host, picEl) { f -> doAddFavEmoji(host.context, f) } }
+        caps.mfFile != null -> add("fav", "收藏", MaterialSymbols.star) { doAddFavEmoji(host.context, caps.mfFile) }
     }
     when {
-        caps.ownPicSave -> add(11, "保存", MaterialSymbols.download) { withPicFile(host, picEl!!) { f -> saveFileTo(host, f) } }
-        "SavePic" in names -> add(11, "保存", MaterialSymbols.download) { native("SavePic") }
-        picEl != null -> add(11, "保存", MaterialSymbols.download) { withPicFile(host, picEl) { f -> saveFileTo(host, f) } }
-        caps.mfFile != null -> add(11, "保存", MaterialSymbols.download) { saveFileTo(host, caps.mfFile) }
+        caps.ownPicSave -> add("save", "保存", MaterialSymbols.download) { withPicFile(host, picEl!!) { f -> saveFileTo(host, f) } }
+        "SavePic" in names -> add("save", "保存", MaterialSymbols.download) { native("SavePic") }
+        picEl != null -> add("save", "保存", MaterialSymbols.download) { withPicFile(host, picEl) { f -> saveFileTo(host, f) } }
+        caps.mfFile != null -> add("save", "保存", MaterialSymbols.download) { saveFileTo(host, caps.mfFile) }
     }
-    // 12-14 翻译 / 隐藏翻译 / 朗读. Our own translate (ai-life endpoint) replaces QQ's native
-    // TranslateText for text messages when enabled; otherwise fall back to the native entries.
-    val ourTranslate = !isHistory && Settings.translateMenuEntry.value && msg != null && caps.fwdText != null
+    // 翻译 / 隐藏翻译 / 朗读. Our own translate (ai-life endpoint) replaces QQ's native
+    // TranslateText for text messages; otherwise fall back to the native entries.
+    val ourTranslate = !isHistory && msg != null && caps.fwdText != null
     // History (合并转发) text bubbles have no live cell, so translation renders into the forward
     // viewer's own registered TextView via [HistoryTranslate] instead of [MessageTranslate].
-    val historyTranslate = isHistory && Settings.translateMenuEntry.value && msg != null &&
+    val historyTranslate = isHistory && msg != null &&
         caps.fwdText != null && HistoryTranslate.has(msg.msgId)
     if (historyTranslate) {
         val id = msg!!.msgId
         val label = if (HistoryTranslate.isOn(id)) "隐藏翻译" else "翻译"
-        add(12, label, MaterialSymbols.translate) { HistoryTranslate.toggle(id) }
+        add("translate", label, MaterialSymbols.translate) { HistoryTranslate.toggle(id) }
     } else if (ourTranslate) {
         val translateMsg = msg!!
         val label = if (MessageTranslate.isManual(translateMsg.msgId)) "隐藏翻译" else "翻译"
-        add(12, label, MaterialSymbols.translate) { MessageTranslate.toggleManual(translateMsg) }
+        add("translate", label, MaterialSymbols.translate) { MessageTranslate.toggleManual(translateMsg) }
     } else if (caps.hasPtt) {
         // For voice messages QQ reuses the TranslateText item as 语音转文字 (speech-to-text).
-        if (!isHistory && "TranslateText" in names) add(12, "转文字", MaterialSymbols.record_voice_over) { native("TranslateText") }
-        if (!isHistory && "HideTranslateText" in names) add(13, "隐藏文字", MaterialSymbols.record_voice_over) { native("HideTranslateText") }
+        if (!isHistory && "TranslateText" in names) add("translate", "转文字", MaterialSymbols.record_voice_over) { native("TranslateText") }
+        if (!isHistory && "HideTranslateText" in names) add("translate", "隐藏文字", MaterialSymbols.record_voice_over) { native("HideTranslateText") }
     } else {
-        if (!isHistory && "TranslateText" in names) add(12, "翻译", MaterialSymbols.translate) { native("TranslateText") }
-        if (!isHistory && "HideTranslateText" in names) add(13, "隐藏翻译", MaterialSymbols.translate) { native("HideTranslateText") }
+        if (!isHistory && "TranslateText" in names) add("translate", "翻译", MaterialSymbols.translate) { native("TranslateText") }
+        if (!isHistory && "HideTranslateText" in names) add("translate", "隐藏翻译", MaterialSymbols.translate) { native("HideTranslateText") }
     }
-    if (!isHistory && "SpeakText" in names) add(14, "朗读", MaterialSymbols.volume_up) { native("SpeakText") }
+    if (!isHistory && "SpeakText" in names) add("speak", "朗读", MaterialSymbols.volume_up) { native("SpeakText") }
     // 截图 — render this message into an image (long-press single; 消息多选 does the batch).
-    if (!isHistory && Settings.chatScreenshot.value && msg != null)
-        add(9, "截图", MaterialSymbols.image) { ChatScreenshot.capture(host, listOf(msg.msgId)) }
+    if (!isHistory && msg != null)
+        add("screenshot", "截图", MaterialSymbols.image) { ChatScreenshot.capture(host, listOf(msg.msgId)) }
     // 总结 — summarize from this message to the end of the chat (long-press single; 消息多选 does the
     // batch over the selection). Live only.
-    if (!isHistory && Settings.summarizeMenuEntry.value && msg != null && msg.msgId != 0L)
-        add(13, "总结", MaterialSymbols.summarize) { summarizeFromMessage(msg, fm) }
-    // 15 删除 (local delete, live only) — red, last
+    if (!isHistory && msg != null && msg.msgId != 0L)
+        add("summarize", "总结", MaterialSymbols.summarize) { summarizeFromMessage(msg, fm) }
+    // 删除 (local delete, live only) — red
     val deleteId = msg?.msgId
     if (!isHistory && deleteId != null && deleteId != 0L && msg != null)
-        add(15, "删除", MaterialSymbols.delete, destructive = true) {
+        add("delete", "删除", MaterialSymbols.delete, destructive = true) {
             val doDelete = {
                 val contact = Contact(msg.chatType, msg.peerUid, "")
                 runCatching {
@@ -233,7 +237,8 @@ suspend fun buildMessageActions(
             }.onFailure { doDelete() } else doDelete()
         }
 
-    return out.sortedBy { it.order }
+    // Apply the user's 菜单自定义 order + visibility (hidden keys dropped; unknown keys kept at end).
+    return LongPressMenuConfig.arrange(out) { it.key }
 }
 
 /**

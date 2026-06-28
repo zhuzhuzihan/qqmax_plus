@@ -40,7 +40,9 @@ private fun styleLabel(code: Int) = when (code) { 1 -> "一句话"; 2 -> "详细
  * current chat. Mirrors `addChatSearchEntry`.
  */
 fun addSummaryHistoryEntry(fragment: SettingFrame) {
-    if (!Settings.summarizeMenuEntry.value && !Settings.summarizeUnreadButton.value) return
+    // Show 总结历史 unless the 总结 long-press entry is hidden in 菜单自定义 AND the unread button is off.
+    val summarizeHidden = "summarize" in momoi.mod.qqpro.hook.menu.LongPressMenuConfig.resolved().second
+    if (summarizeHidden && !Settings.summarizeUnreadButton.value) return
     runCatching {
         val scroll = fragment.i ?: return
         val container = scroll.getChildAt(0) as? LinearLayout ?: return

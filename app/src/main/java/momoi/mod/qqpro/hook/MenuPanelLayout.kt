@@ -117,6 +117,8 @@ class MenuPanelLayout(p0: (Int) -> Unit, p1: Boolean) : MenuFrame(p0, p1) {
                 val emojiAt = items.indexOfFirst { it is EmojiMenuItem }
                 items.add(if (emojiAt >= 0) emojiAt + 1 else 0, StickerMenuItem(this))
             }
+            // Apply the user's 菜单自定义 order + visibility to the assembled panel.
+            momoi.mod.qqpro.hook.menu.arrangeAttachmentItems(items)
             adapter.notifyDataSetChanged()
             Utils.log("MenuPanelLayout: injected 录像/音频文件 at $at")
         }.onFailure { Utils.log("MenuPanelLayout: inject 录像 failed: $it") }

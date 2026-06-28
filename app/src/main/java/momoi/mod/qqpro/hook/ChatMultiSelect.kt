@@ -33,7 +33,7 @@ import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 
 /**
- * 消息多选 — multi-select mode for chat messages (Settings.chatMultiSelect).
+ * 消息多选 — multi-select mode for chat messages (the "多选" long-press entry; visibility via 菜单自定义).
  *
  * Entered from the long-press menu's "多选" entry, which seeds the long-pressed message. While
  * active a single TAP on any message bubble toggles its selection (scrolling still works), and a
