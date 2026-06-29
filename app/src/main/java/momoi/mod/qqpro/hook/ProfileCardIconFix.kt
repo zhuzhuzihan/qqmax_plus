@@ -41,6 +41,14 @@ class ProfileCardIconFix : ProfileCardFragment() {
         // page is already built), so the displayed profile is unaffected.
         runCatching { super.onViewCreated(view, savedInstanceState) }
             .onFailure { Utils.log("ProfileCardFragment super.onViewCreated threw (likely at_btn null on view reuse): ${it.message}") }
+        // 长按头像保存大图。在 rich/legacy 分支之前绑定:rich 重建会把同一个 avatar 视图 re-parent 进新
+        // 视图树,监听器跟随视图实例保留,不受影响。
+        runCatching {
+            val ctx = requireContext()
+            val uin = arguments?.getParcelable<ProfileData>("profile_data")?.d.orEmpty()
+            val avatar = view.findViewById<View>(resources.getIdentifier("avatar", "id", ctx.packageName))
+            AvatarSave.attach(avatar) { AvatarSave.userUrl(uin) }
+        }.onFailure { Utils.log("ProfileCardIconFix avatar-save bind error: ${it.message}") }
         if (Settings.useRichProfile.value || Settings.materialContactsList.value) {
             // Full Material rebuild: re-parents the native views into a new tree (own scroll + info card).
             try {

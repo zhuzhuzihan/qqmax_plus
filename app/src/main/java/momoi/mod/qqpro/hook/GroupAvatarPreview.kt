@@ -40,6 +40,8 @@ class GroupAvatarPreview : SettingFrame() {
             Utils.log("GroupAvatarPreview: bind group avatar preview, group=$peerId")
             bindGroupAvatarPreview(this, this.f, peerId)
         }
+        // 长按头像(群头像或单聊对方头像)保存大图到相册。群聊用群号、单聊用对方 uin 取大图。
+        AvatarSave.attach(this.f) { AvatarSave.contactUrl(chatType, peerId) }
     }
 }
 
