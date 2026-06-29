@@ -49,10 +49,13 @@ class SummaryViewer private constructor(
 
     private lateinit var root: LinearLayout
     private lateinit var scroll: ScrollView
+    private lateinit var col: LinearLayout
+    private lateinit var loadRow: LinearLayout
     private lateinit var bodyView: TextView
     private lateinit var spinner: M3CircularProgress
     private lateinit var statusView: TextView
     private lateinit var actionBar: LinearLayout
+    private var retryButton: TextView? = null
 
     companion object {
         /** Stream a fresh summary of [messages] (oldest→newest) into a new viewer. */
@@ -95,12 +98,12 @@ class SummaryViewer private constructor(
         // would steal the screen), so the full summary stays readable and you scroll to the buttons.
         scroll = ScrollView(ctx)
         scroll.isFillViewport = true
-        val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(col, ViewGroup.LayoutParams(FILL, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(scroll, LinearLayout.LayoutParams(FILL, 0, 1f))
 
         // Loading row (spinner + status), hidden once content/finished.
-        val loadRow = LinearLayout(ctx).apply {
+        loadRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(0, 10.dp, 0, 10.dp)
@@ -213,7 +216,32 @@ class SummaryViewer private constructor(
                 (spinner.parent as? View)?.visibility = View.VISIBLE
                 spinner.visibility = View.GONE
                 statusView.text = message
+                // Non-limit failures (server/network) are retryable — offer a retry button so the
+                // user doesn't have to back out and re-open the viewer to try again.
+                if (retryable) showRetryButton()
             }
         })
+    }
+
+    /** Reveal a one-shot "重试" button below the loading row; tapping it re-streams the summary. */
+    private fun showRetryButton() {
+        if (retryButton != null) return
+        retryButton = actionButton("重试") { retry() }.also {
+            val idx = col.indexOfChild(loadRow) + 1
+            col.addView(it, idx)
+        }
+    }
+
+    private fun retry() {
+        if (!active) return
+        retryButton?.let { col.removeView(it) }
+        retryButton = null
+        sb.setLength(0)
+        done = false
+        bodyView.text = ""
+        statusView.text = "总结中…"
+        spinner.visibility = View.VISIBLE
+        (spinner.parent as? View)?.visibility = View.VISIBLE
+        startStreaming()
     }
 }
