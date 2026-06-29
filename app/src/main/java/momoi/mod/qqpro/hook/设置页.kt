@@ -458,7 +458,8 @@ class 设置页 : SettingsActivity() {
         },
         SettingsCategory("聊天截图", "把选中的消息渲染成长图") {
             section("聊天截图", "在「菜单自定义 › 长按消息菜单」可显示/隐藏“截图”项。以下选项调整渲染出的长图样式。")
-            switch("渲染标题栏与输入框", "截图顶部显示群名/对方名标题栏、底部显示空输入框装饰(仅群名，无圆角/未读)；关闭则只渲染消息", Settings.screenshotChrome)
+            switch("渲染标题栏", "截图顶部显示群名/对方名标题栏(仅群名，无圆角/未读)；关闭则不渲染顶部标题", Settings.screenshotTitlebar)
+            switch("渲染输入框", "截图底部显示空输入框装饰；关闭则不渲染底部输入框", Settings.screenshotInputBar)
             switch("自己显示在左侧", "把自己发送的消息也渲染在左侧(第三方视角)；默认关闭(自己在右)", Settings.screenshotSelfAsOther)
             switch("显示昵称与头像", "截图中显示真实昵称与头像；关闭则匿名化为 A/B/C 与随机色字母头像", Settings.screenshotShowIdentity)
             switch("生成水印", "在截图底部添加“由 QQ Max 生成”水印", Settings.screenshotWatermark)

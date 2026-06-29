@@ -85,7 +85,7 @@ object ChatScreenshot {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(M3.surface)
         }
-        if (Settings.screenshotChrome.value) container.addView(buildTitlebar(ctx), LinearLayout.LayoutParams(FILL, WRAP))
+        if (Settings.screenshotTitlebar.value) container.addView(buildTitlebar(ctx), LinearLayout.LayoutParams(FILL, WRAP))
 
         // Header-merge relative to the SELECTED set (first rendered always shows its header).
         val ordered = positions.mapNotNull { live[it] as? WatchAIOMsgItem }
@@ -118,7 +118,7 @@ object ChatScreenshot {
         }
         if (rendered == 0) { Utils.toast(ctx, "截图失败(无可渲染消息)"); return }
 
-        if (Settings.screenshotChrome.value) container.addView(buildInputBar(ctx), LinearLayout.LayoutParams(FILL, WRAP))
+        if (Settings.screenshotInputBar.value) container.addView(buildInputBar(ctx), LinearLayout.LayoutParams(FILL, WRAP))
         if (Settings.screenshotWatermark.value) container.addView(buildWatermark(ctx), LinearLayout.LayoutParams(FILL, WRAP))
 
         Utils.toast(ctx, "生成截图…")

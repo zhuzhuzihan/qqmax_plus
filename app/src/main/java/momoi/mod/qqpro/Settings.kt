@@ -397,8 +397,10 @@ object Settings {
     // The "截图" entry's visibility now lives in 菜单自定义 ([longPressMenuOrder]). The options below
     // tune how the rendered screenshot looks.
     // Render a decorative titlebar (contact/group name only — no rounded corner / unread badge) at the
-    // top and an empty input-bar at the bottom of the screenshot. Default on.
-    val screenshotChrome = BooleanPref("screenshotChrome", true)
+    // top of the screenshot. Default on.
+    val screenshotTitlebar = BooleanPref("screenshotTitlebar", true)
+    // Render a decorative empty input-bar at the bottom of the screenshot. Default on.
+    val screenshotInputBar = BooleanPref("screenshotInputBar", true)
     // Render your OWN messages on the LEFT (as a third party would see them) instead of the right.
     // Default off.
     val screenshotSelfAsOther = BooleanPref("screenshotSelfAsOther", false)
@@ -459,7 +461,7 @@ object Settings {
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
-        screenshotChrome, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
+        screenshotTitlebar, screenshotInputBar, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
         notifyVibrateMode, voiceBtnText, watchdogEnabled, enableLog,
