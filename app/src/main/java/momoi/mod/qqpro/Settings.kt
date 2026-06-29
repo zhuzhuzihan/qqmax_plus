@@ -400,6 +400,8 @@ object Settings {
     // On = chronological (time) order, matching the conversation; off = the order they were tapped.
     // Default on (by time).
     val multiSelectTimeOrder = BooleanPref("multiSelectTimeOrder", true)
+    // 消息多选: prefix each message with the sender's name when copying (复制 / 部分复制). Default off.
+    val multiSelectCopySender = BooleanPref("multiSelectCopySender", false)
 
     // Render a decorative titlebar (contact/group name only — no rounded corner / unread badge) at the
     // top of the screenshot. Default on.
@@ -466,7 +468,7 @@ object Settings {
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
-        multiSelectTimeOrder,
+        multiSelectTimeOrder, multiSelectCopySender,
         screenshotTitlebar, screenshotInputBar, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,

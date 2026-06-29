@@ -11,6 +11,7 @@ import com.tencent.biz.richframework.util.RFWSaveUtil
 import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import WatchPicElementExtKt
 import momoi.mod.qqpro.MsgUtil
+import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.aio_cell.doAddFavEmoji
@@ -78,9 +79,12 @@ val batchExecutors: Map<String, (View, List<WatchAIOMsgItem>) -> Unit> = mapOf(
 /**
  * Join the selected messages' copy-text with a BLANK line (two newlines) between each. Uses the shared
  * [MsgCapabilities.copyText] (text → ark rich text → file name) so batch copy matches single-message copy.
+ * When [Settings.multiSelectCopySender] is on, each message is prefixed with its sender's name
+ * ("名字：内容"), matching QQ's merged-forward copy format.
  */
 private fun joinText(items: List<WatchAIOMsgItem>): String = items.joinToString("\n\n") { item ->
-    MsgCapabilities(item.d, item).copyText.orEmpty()
+    val body = MsgCapabilities(item.d, item).copyText.orEmpty()
+    if (Settings.multiSelectCopySender.value) "${SummaryMessages.senderName(item)}：$body" else body
 }.trim()
 
 // ── executors ───────────────────────────────────────────────────────────────────
