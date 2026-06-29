@@ -618,8 +618,15 @@ object QzoneFeedCard {
             frame.addView(coverIv, FrameLayout.LayoutParams(MATCH, h))
             frame.addView(symbolImage(ctx, MaterialSymbols.play_arrow, android.graphics.Color.WHITE, 48),
                 FrameLayout.LayoutParams(48.dp, 48.dp, Gravity.CENTER))
-            // Give the player a fixed height via the child (the caller sets the frame to WRAP).
-            frame.addView(InlineVideoView(ctx, videoUrl), FrameLayout.LayoutParams(MATCH, h))
+            // Honour 单视频帖子内联播放: on → inline player (tap to play in place); off → tapping the
+            // cover opens the fullscreen viewer (mirrors the native QZoneInlineVideo gate).
+            if (Settings.qzoneInlineVideo.value) {
+                // Give the player a fixed height via the child (the caller sets the frame to WRAP).
+                frame.addView(InlineVideoView(ctx, videoUrl), FrameLayout.LayoutParams(MATCH, h))
+            } else {
+                frame.isClickable = true
+                frame.setOnClickListener { QzoneActions.openMedia(host, data, 0) }
+            }
             return frame
         }
         // Single IMAGE → one thumbnail cropped to between 4:3 and 16:9.

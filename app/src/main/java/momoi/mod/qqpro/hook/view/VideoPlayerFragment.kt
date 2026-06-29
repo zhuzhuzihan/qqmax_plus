@@ -78,6 +78,8 @@ class VideoPlayerFragment(
     // Count of frames actually drawn to the texture; if the decoder errors (805) before any frame
     // renders, the video is undecodable on this device and we fall back to the native viewer.
     private var framesRendered = 0
+    // Set when MEDIA_INFO_VIDEO_RENDERING_START fires — proof the device CAN decode/show this video.
+    private var renderStarted = false
     private var fellBack = false
 
     private var scale = 1f
@@ -315,11 +317,13 @@ class VideoPlayerFragment(
                 if (w > 0 && h > 0) { videoW = w; videoH = h; resizeTexture() }
             }
             player.setOnInfoListener { _, what, extra ->
-                Utils.log("player: onInfo what=$what extra=$extra (framesRendered=$framesRendered)")
-                // MEDIA_INFO_PLAY_VIDEO_ERROR (805, hidden constant): the video track failed — the
-                // device can't decode this video (audio still plays). A healthy video never emits it,
-                // so fall back to the native viewer on the first occurrence (fellBack guards re-entry).
-                if (what == MEDIA_INFO_PLAY_VIDEO_ERROR) fallBackToNative()
+                Utils.log("player: onInfo what=$what extra=$extra (framesRendered=$framesRendered renderStarted=$renderStarted)")
+                // A genuinely playable video fires MEDIA_INFO_VIDEO_RENDERING_START (3) when its first
+                // real frame shows. MEDIA_INFO_PLAY_VIDEO_ERROR (805) can ALSO fire mid/looping playback
+                // on a healthy video (e.g. extra=-19), so 805 alone isn't "undecodable". Only fall back
+                // when rendering NEVER started — that's the truly-undecodable case (audio only, no frames).
+                if (what == MEDIA_INFO_VIDEO_RENDERING_START) renderStarted = true
+                if (what == MEDIA_INFO_PLAY_VIDEO_ERROR && !renderStarted) fallBackToNative()
                 false
             }
             player.setOnPreparedListener {
@@ -485,6 +489,8 @@ class VideoPlayerFragment(
     }
 
     private companion object {
+        // android.media.MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START — first frame rendered (public).
+        const val MEDIA_INFO_VIDEO_RENDERING_START = 3
         // android.media.MediaPlayer.MEDIA_INFO_PLAY_VIDEO_ERROR — hidden, not in the public SDK.
         const val MEDIA_INFO_PLAY_VIDEO_ERROR = 805
     }
