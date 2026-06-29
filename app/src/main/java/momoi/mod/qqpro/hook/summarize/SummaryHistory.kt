@@ -92,6 +92,18 @@ class SummaryHistoryFragment : MyDialogFragment() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Force the dialog window to fill the screen so the SwipeBackLayout covers it entirely.
+        // Without this the window wraps its content height; when the history is empty there's no
+        // weighted ScrollView to stretch it, so the window collapses to the two short TextViews at
+        // the top and a swipe-back anywhere below them is dead — trapping the user on the screen.
+        dialog?.window?.setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
+        )
+    }
+
     private fun rebuild() {
         root.removeAllViews()
         val ctx = requireContext()
