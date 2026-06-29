@@ -17,6 +17,7 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.recyclerview.widget.RecyclerView
 import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
+import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.enums.NTMsgType
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.menu.Entry
@@ -287,6 +288,8 @@ object ChatMultiSelect {
             // width-paddingRight] and the number sits centered in the [0, paddingLeft] gutter.
             val left = parent.paddingLeft.toFloat()
             val right = (parent.width - parent.paddingRight).toFloat()
+            // Badge numbers reflect the order the selection will be used in (time or tap order).
+            val rank = selectionRank()
             val cx = parent.paddingLeft / 2f
             for (i in 0 until parent.childCount) {
                 val child = parent.getChildAt(i)
@@ -302,7 +305,7 @@ object ChatMultiSelect {
                 val cy = (child.top + child.bottom) / 2f
                 if (isSel) {
                     c.drawCircle(cx, cy, radius, circleFill)
-                    val order = selected.indexOf(msgId) + 1
+                    val order = (rank[msgId] ?: selected.indexOf(msgId)) + 1
                     val baseline = cy - (numberPaint.descent() + numberPaint.ascent()) / 2f
                     c.drawText(order.toString(), cx, baseline, numberPaint)
                 } else {
@@ -380,9 +383,30 @@ object ChatMultiSelect {
 
     // ── batch-action menu (confirm / check button) ───────────────────────────────
 
-    /** The selected messages as live items, in tap order. */
-    private fun selectedItems(): List<WatchAIOMsgItem> =
-        selected.mapNotNull { id -> CurrentMsgList.msgList.value.find { it.d.msgId == id } }
+    /**
+     * The selected messages as live items, in the order they'll be used for batch actions: by tap
+     * order, or — when [Settings.multiSelectTimeOrder] is on (the default) — chronological (the order
+     * of the live message list, which is already time-sorted).
+     */
+    private fun selectedItems(): List<WatchAIOMsgItem> {
+        val live = CurrentMsgList.msgList.value
+        val items = selected.mapNotNull { id -> live.find { it.d.msgId == id } }
+        return if (Settings.multiSelectTimeOrder.value) items.sortedBy { live.indexOf(it) } else items
+    }
+
+    /**
+     * Selected msgIds ranked for the gutter badge — same ordering as [selectedItems] so the number on
+     * each cell matches the order it will actually be used in.
+     */
+    private fun selectionRank(): Map<Long, Int> {
+        val ids = if (Settings.multiSelectTimeOrder.value) {
+            val live = CurrentMsgList.msgList.value
+            val pos = HashMap<Long, Int>(live.size)
+            live.forEachIndexed { i, it -> pos[it.d.msgId] = i }
+            selected.sortedBy { pos[it] ?: Int.MAX_VALUE }
+        } else selected.toList()
+        return ids.withIndex().associate { (i, id) -> id to i }
+    }
 
     /**
      * Confirm pressed: reuse the long-press menu's per-message option set

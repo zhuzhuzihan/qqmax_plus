@@ -326,6 +326,7 @@ class 设置页 : SettingsActivity() {
                 startActivity(Intent(this@设置页, MenuEditorActivity::class.java)
                     .putExtra(MenuEditorActivity.EXTRA_MENU, MenuEditorActivity.MENU_ATTACHMENT))
             }
+            switch("多选按时间排序", "多选转发/截图等批量操作时，选中消息按聊天时间顺序处理；关闭则按点选先后顺序", Settings.multiSelectTimeOrder)
         },
         SettingsCategory("聊天输入", "输入框、发送方式与表情") {
             switch("聊天页直接输入", "在聊天页用输入框替换键盘键，有文字时麦克风键变发送键", Settings.inlineChatInput)

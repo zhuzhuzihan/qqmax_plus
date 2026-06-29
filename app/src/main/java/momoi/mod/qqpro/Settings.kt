@@ -396,6 +396,11 @@ object Settings {
     // ===== 聊天截图 (by AILIFE) =====
     // The "截图" entry's visibility now lives in 菜单自定义 ([longPressMenuOrder]). The options below
     // tune how the rendered screenshot looks.
+    // 消息多选: order the selected messages are used in for batch actions (forward / screenshot / …).
+    // On = chronological (time) order, matching the conversation; off = the order they were tapped.
+    // Default on (by time).
+    val multiSelectTimeOrder = BooleanPref("multiSelectTimeOrder", true)
+
     // Render a decorative titlebar (contact/group name only — no rounded corner / unread badge) at the
     // top of the screenshot. Default on.
     val screenshotTitlebar = BooleanPref("screenshotTitlebar", true)
@@ -461,6 +466,7 @@ object Settings {
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings,
         translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
+        multiSelectTimeOrder,
         screenshotTitlebar, screenshotInputBar, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
