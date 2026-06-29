@@ -64,10 +64,11 @@ class 长按菜单调整(p0: (MenuItemFactory.ItemEnum) -> Unit, p1: String?) :
         val msg = liveItem?.d ?: HistoryMsgRegistry.find(msgId)
         val fm = runCatching { parentFragmentManager }.getOrNull()
         Utils.log("menu: msg=${msg != null} history=$isHistory msgId=$msgId")
-        // 消息多选: a long-press while multi-select is already active toggles the pressed message and
-        // dismisses without showing the menu (the gesture path handles plain taps). One toggle path.
+        // 消息多选: a long-press while multi-select is already active RANGE-selects from the last
+        // selection to the pressed message and dismisses without showing the menu (a plain tap, handled
+        // on the gesture path, still toggles a single message). One range path.
         if (ChatMultiSelect.active) {
-            ChatMultiSelect.toggle(msg?.msgId ?: msgId)
+            ChatMultiSelect.selectRangeTo(msg?.msgId ?: msgId)
             runCatching { dismiss() }
             return View(inflater.context)
         }

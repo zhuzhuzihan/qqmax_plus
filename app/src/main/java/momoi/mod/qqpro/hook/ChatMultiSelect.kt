@@ -38,7 +38,8 @@ import java.util.WeakHashMap
  *
  * Entered from the long-press menu's "多选" entry, which seeds the long-pressed message. While
  * active a single TAP on any message bubble toggles its selection (scrolling still works), and a
- * long-press also toggles — the native menu fragment self-dismisses + toggles instead of opening
+ * long-press RANGE-selects from the last selection to the pressed message — the native menu fragment
+ * self-dismisses + range-selects instead of opening
  * (see 长按菜单调整). A bottom Material bar shows the count and exits.
  *
  * This is phase 1 — selection + UI only. Batch actions (转发/删除/合并转发/复制) hang off
@@ -56,6 +57,9 @@ object ChatMultiSelect {
 
     /** Selected msgIds in tap order (LinkedHashSet → insertion-ordered for future batch ops). */
     val selected = linkedSetOf<Long>()
+
+    /** The most recently selected message — the anchor for long-press range selection. */
+    private var anchorMsgId = 0L
 
     private var rvRef: WeakReference<RecyclerView>? = null
     /** The live chat RecyclerView (captured on every cell bind), for features outside the list — e.g.
@@ -116,6 +120,7 @@ object ChatMultiSelect {
         active = true
         selected.clear()
         if (seedMsgId != 0L) selected.add(seedMsgId)
+        anchorMsgId = seedMsgId
         showBar(rv)
         updateBar()
         applyGutter(rv, true)
@@ -134,6 +139,7 @@ object ChatMultiSelect {
     private fun reset() {
         active = false
         selected.clear()
+        anchorMsgId = 0L
         dismissMenu()
         removeBar()
         backCb?.remove(); backCb = null
@@ -202,7 +208,28 @@ object ChatMultiSelect {
     /** Toggle [msgId]'s selection. Stays in multi-select even at 0 selected — exit is explicit. */
     fun toggle(msgId: Long) {
         if (!active || msgId == 0L) return
-        if (!selected.add(msgId)) selected.remove(msgId)
+        if (!selected.add(msgId)) selected.remove(msgId) else anchorMsgId = msgId
+        updateBar()
+        rvRef?.get()?.invalidateItemDecorations()
+    }
+
+    /**
+     * Long-press range select: select every message from the last-selected anchor to [msgId] inclusive,
+     * by their order in the live message list. With no usable anchor yet (nothing selected, or the
+     * anchor scrolled out of the loaded list) it just selects [msgId]. The anchor then moves to [msgId]
+     * so a follow-up long-press extends from there. Never deselects — it only adds to the range.
+     */
+    fun selectRangeTo(msgId: Long) {
+        if (!active || msgId == 0L) return
+        val live = CurrentMsgList.msgList.value
+        val to = live.indexOfFirst { it.d.msgId == msgId }
+        val from = if (anchorMsgId != 0L) live.indexOfFirst { it.d.msgId == anchorMsgId } else -1
+        if (to < 0 || from < 0) {
+            selected.add(msgId)
+        } else {
+            for (i in minOf(from, to)..maxOf(from, to)) selected.add(live[i].d.msgId)
+        }
+        anchorMsgId = msgId
         updateBar()
         rvRef?.get()?.invalidateItemDecorations()
     }
@@ -244,7 +271,7 @@ object ChatMultiSelect {
             return true
         }
         // Long-press is intentionally NOT handled here: the native long-press still opens the menu
-        // fragment, which (when active) toggles + self-dismisses (长按菜单调整). One handler, no double toggle.
+        // fragment, which (when active) range-selects + self-dismisses (长按菜单调整). One handler.
     }
 
     private fun touchListener(gesture: GestureDetector) = object : RecyclerView.OnItemTouchListener {
