@@ -141,8 +141,15 @@ suspend fun buildMessageActions(
     val copyText = caps.copyText
     if (copyText != null) add("copy", "复制", MaterialSymbols.content_copy) { Utils.copyToClipboard(host.context, copyText) }
     else if ("CopyMsg" in names) add("copy", "复制", MaterialSymbols.content_copy) { native("CopyMsg") }
-    // 撤回 — recall via kernel, gated on awaited eligibility (own / owner / admin-on-others). Red.
-    if (!isHistory && msg != null && msg.msgId != 0L && recallEligible(msg))
+    // 撤回 — recall via kernel. In a group we decide eligibility ourselves (owner/admin may recall
+    // others' messages, which the kernel won't surface on the watch). In a 1:1 chat we DON'T take
+    // control: the kernel alone decides whether recall is offered (own message, within the 2-minute
+    // window) and exposes that via its RevokeMsg item, so defer to that instead of always showing it
+    // for our own messages. The multi-select path has no kernel item list (names empty) — there we
+    // fall back to recallEligible (own message), and the kernel rejects out-of-window recalls
+    // harmlessly. Red.
+    if (!isHistory && msg != null && msg.msgId != 0L &&
+        (if (CurrentContact.isGroup || names.isEmpty()) recallEligible(msg) else "RevokeMsg" in names))
         add("recall", "撤回", MaterialSymbols.undo, destructive = true) {
             runCatching { KernelServiceUtil.c()?.recallMsg(CurrentContact, msg.msgId, null) }
                 .onFailure { Utils.log("menu recall failed: $it") }
