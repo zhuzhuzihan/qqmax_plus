@@ -36,16 +36,25 @@ internal const val AT_LINK_COLOR = 0xFF_80D8FF.toInt()
  * from this view's tree (see [findNavControllerFromTree]).
  */
 fun View.openMemberProfile(member: MemberInfo) {
-    val isFriend = try {
-        val app = MobileQQ.getMobileQQ().peekAppRuntime()
-        (app?.getRuntimeService(IContactRuntimeService::class.java, "") as? IContactRuntimeService)
-            ?.isFriend(member.uid) ?: false
-    } catch (e: Exception) {
-        false
-    }
     // ProfileData(birthday, gender, uin, uid, nickName, isFriend) — the card
     // re-fetches the full profile from the uid on open.
-    navigateToProfile(ProfileData("0-0", -1, member.uin.toString(), member.uid, member.showName(), isFriend))
+    navigateToProfile(ProfileData("0-0", -1, member.uin.toString(), member.uid, member.showName(), isFriend(member.uid)))
+}
+
+/**
+ * Real friend status for a [uid] via the kernel contact service — the same source the app's own
+ * navigation uses. The profile card's primary button (去聊天 vs 加好友) is driven by this; opening
+ * with a hardcoded value made the card mis-detect friends as strangers when reached uid-only.
+ */
+private fun isFriend(uid: String): Boolean = try {
+    if (uid.isEmpty()) false
+    else {
+        val app = MobileQQ.getMobileQQ().peekAppRuntime()
+        (app?.getRuntimeService(IContactRuntimeService::class.java, "") as? IContactRuntimeService)
+            ?.isFriend(uid) ?: false
+    }
+} catch (e: Exception) {
+    false
 }
 
 /**
@@ -66,7 +75,7 @@ fun View.openMemberProfileByUid(uid: String) {
         Utils.toast(context, "无法打开资料卡")
         return
     }
-    navigateToProfile(ProfileData("0-0", -1, uin, uid, "", false))
+    navigateToProfile(ProfileData("0-0", -1, uin, uid, "", isFriend(uid)))
 }
 
 /**
@@ -95,7 +104,11 @@ fun View.openProfileByUin(uin: Long) {
     ProfileDetailCard.resolveUid(uin) { uid ->
         view.post {
             Utils.log("openProfileByUin uin=$uin uid=${uid?.ifEmpty { null } ?: "(none)"}")
-            view.navigateToProfile(ProfileData("0-0", -1, uin.toString(), uid.orEmpty(), "", false))
+            // Birthday "" (not the "0-0" member marker) so the profile card never treats a QZone-opened
+            // card as a group-member open: the 艾特Ta button can't redirect back into a chat from here,
+            // so it must stay hidden. ProfileData.birthday is ignored by native code (the card re-fetches
+            // detail by uid), so this only affects our own fromGroup test in ProfileCardIconFix.
+            view.navigateToProfile(ProfileData("", -1, uin.toString(), uid.orEmpty(), "", isFriend(uid.orEmpty())))
         }
     }
 }

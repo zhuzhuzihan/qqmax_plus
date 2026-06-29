@@ -16,6 +16,8 @@ import com.tencent.qqnt.watch.profile.ui.ProfileCardFragment
 import com.tencent.widget.SingleLineTextView
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.hook.action.CurrentContact
+import momoi.mod.qqpro.hook.action.isGroup
 import momoi.mod.qqpro.hook.contact.ProfileNameView
 import momoi.mod.qqpro.lib.dp
 import momoi.mod.qqpro.lib.material.M3
@@ -60,6 +62,16 @@ class ProfileCardIconFix : ProfileCardFragment() {
                         resources.getIdentifier("nickname", "id", ctx.packageName)
                     )?.text?.toString().orEmpty()
                 val uin = profile?.d.orEmpty()
+                // Real friend status drives the primary 去聊天/加好友 button. ProfileData.isFriend (g)
+                // is set at navigation time via IContactRuntimeService.isFriend, so it's authoritative
+                // — and the native goto_chat handler is wired from the same field, so they stay in sync.
+                val isFriend = profile?.g ?: false
+                // Was the card opened from a group? The member-open path (startMemberProfileCard and our
+                // own group/grey-tip openers) builds ProfileData with birthday "0-0" + gender -1; the
+                // regular contact/DM path (startProfileCard) carries real values. Combined with an active
+                // group chat, this means the 艾特Ta button only appears for a group member — never in a
+                // DM, the add-friend/search flow, or a QZone-opened card.
+                val fromGroup = CurrentContact.isGroup && profile?.b == "0-0" && profile.c == -1
                 // @-mention action: stage the @ and pop back to the chat (framework onBackPressed, not
                 // the obfuscated NavController), letting the chat's onResume fire openIME → inline @.
                 val atAction = {
@@ -71,7 +83,7 @@ class ProfileCardIconFix : ProfileCardFragment() {
                     }.onFailure { Utils.log("profile @ action failed: $it") }
                     Unit
                 }
-                RichProfilePage.build(view, ctx, uid, name, uin, atAction)
+                RichProfilePage.build(view, ctx, uid, name, uin, isFriend, fromGroup, atAction)
             } catch (e: Exception) {
                 Utils.log("ProfileCardIconFix rich build error: ${e.message}")
             }

@@ -46,17 +46,24 @@ object RichProfilePage {
      */
     @JvmField var pendingAt = false
 
-    /** [root] is the fragment's content view (a ConstraintLayout). [uid]/[displayName]/[uin] come from the args. */
-    fun build(root: View, ctx: Context, uid: String, displayName: String, uin: String, atAction: () -> Unit) {
+    /**
+     * [root] is the fragment's content view (a ConstraintLayout). [uid]/[displayName]/[uin] come from
+     * the args. [isFriend] drives the primary button (去聊天 vs 加好友) — read from the real friend
+     * status, not the native button label. [fromGroup] gates the 艾特Ta button, which only makes
+     * sense when the card was opened from a group (so the @ can be inserted into that group's input).
+     */
+    fun build(
+        root: View, ctx: Context, uid: String, displayName: String, uin: String,
+        isFriend: Boolean, fromGroup: Boolean, atAction: () -> Unit,
+    ) {
         if (root !is ViewGroup || root.findViewWithTag<View>(TAG) != null) return
         runCatching {
             val pkg = ctx.packageName
             fun vid(name: String) = ctx.resources.getIdentifier(name, "id", pkg)
             val avatar = root.findViewById<View>(vid("avatar"))
             val selfQq = root.findViewById<View>(vid("self_qq"))
-            val atBtn = root.findViewById<View>(vid("at_btn"))
             val gotoChat = root.findViewById<View>(vid("goto_chat"))
-            Utils.log("RichProfilePage.build uid=$uid avatar=${avatar != null} qq=${selfQq != null} at=${atBtn != null} goto=${gotoChat != null}")
+            Utils.log("RichProfilePage.build uid=$uid friend=$isFriend fromGroup=$fromGroup avatar=${avatar != null} qq=${selfQq != null} goto=${gotoChat != null}")
 
             // Detach the original ScrollView so we can install our own scroll container.
             root.removeAllViews()
@@ -180,9 +187,8 @@ object RichProfilePage {
             // All buttons use our own M3Button (the watch theme isn't MaterialComponents-based, so a
             // real MaterialButton can't be styled consistently — different font/metrics). We build a
             // fresh M3Button per action and forward its click to the native button's handler (or our
-            // own action), instead of re-parenting the native MaterialButton. This keeps the 去聊天/
-            // 艾特Ta/加好友/TA的空间 buttons visually identical.
-            // Button kinds: 去聊天 (message), 艾特Ta (@), 加好友 (add friend), TA的空间 (QZone).
+            // own action), instead of re-parenting the native MaterialButton. This keeps the buttons
+            // visually identical.
             val H = 40.dp
             fun addM3Button(symbol: String, label: String, onClick: () -> Unit) {
                 val mb = M3Button(ctx).variant(M3Button.Variant.FILLED).apply {
@@ -195,26 +201,28 @@ object RichProfilePage {
                 }
                 content.addView(mb)
             }
-            fun styleButton(btn: View?) {
-                btn ?: return
-                val label = (btn as? android.widget.TextView)?.text?.toString().orEmpty()
-                val isAt = label.contains("艾特") || label.contains("@")
-                val symbol = when {
-                    label.contains("加好友") -> MaterialSymbols.person_add
-                    isAt -> MaterialSymbols.alternate_email
-                    else -> MaterialSymbols.chat_bubble // 去聊天
-                }
-                val base = label.removePrefix("💬 ").removePrefix("＋ ").removePrefix("@ ").trim()
-                // The native 艾特Ta handler's openIME is lost from the profile page (chat not resumed);
-                // replace it with our stage-and-pop action that defers openIME to the chat's onResume.
-                // Other buttons forward to the native handler (the native view stays off-screen but its
-                // click listener still fires when performed).
-                addM3Button(symbol, base) { if (isAt) atAction() else btn.performClick() }
-            }
-            styleButton(gotoChat)
-            styleButton(atBtn)
 
-            // TA的空间 — open the user's QZone home feed (reuses the chat-settings QZone shortcut).
+            // Primary action — 去聊天 for friends, 加好友 for strangers. Driven by the real friend
+            // status (the native goto_chat label can be wrong when the card is opened uid-only, e.g.
+            // from a grey-tip name or a QZone header). The native goto_chat button carries the matching
+            // handler (b0 → navigate to chat / addFriend coroutine), wired in super.onViewCreated from
+            // the same ProfileData.isFriend; forwarding performClick() keeps that behaviour. The native
+            // view stays off-screen after removeAllViews but its click listener still fires.
+            gotoChat?.let { native ->
+                if (isFriend) addM3Button(MaterialSymbols.chat_bubble, "去聊天") { native.performClick() }
+                else addM3Button(MaterialSymbols.person_add, "加好友") { native.performClick() }
+            }
+
+            // 艾特Ta — only when opened from a group (the @ is staged then inserted into that group's
+            // input bar via the chat's onResume). Hidden in DMs, add-friend/search, QZone, etc., where
+            // there is no group to @ into. The native handler's immediate openIME is lost from the
+            // profile page, so we always use our own stage-and-pop atAction.
+            if (fromGroup) {
+                addM3Button(MaterialSymbols.alternate_email, "艾特Ta") { atAction() }
+            }
+
+            // TA的空间 — always available: open the user's QZone home feed (reuses the chat-settings
+            // QZone shortcut). Only the uin is needed, which every profile carries.
             val uinLong = uin.trim().toLongOrNull()
             if (uinLong != null && uinLong > 0) {
                 addM3Button(MaterialSymbols.star, "TA的空间") { openUserQzone(content, uinLong) }
