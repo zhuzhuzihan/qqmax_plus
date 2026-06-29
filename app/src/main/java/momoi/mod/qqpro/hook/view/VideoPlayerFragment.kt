@@ -53,6 +53,9 @@ class VideoPlayerFragment(
     // Returns the kernel download progress (0..1) while downloading, or null if unknown. When it
     // yields a value the spinner flips to determinate; otherwise it stays an indeterminate spinner.
     private val progressProvider: (() -> Float?)? = null,
+    // Invoked when the device can't decode the video (audio plays, no frames — e.g. resolution above
+    // the watch decoder's limit). We dismiss and hand off to this (the native RFW viewer).
+    private val onUndecodable: (() -> Unit)? = null,
 ) : MyDialogFragment() {
 
     private var textureView: TextureView? = null
@@ -72,6 +75,10 @@ class VideoPlayerFragment(
 
     private var videoW = 0
     private var videoH = 0
+    // Count of frames actually drawn to the texture; if the decoder errors (805) before any frame
+    // renders, the video is undecodable on this device and we fall back to the native viewer.
+    private var framesRendered = 0
+    private var fellBack = false
 
     private var scale = 1f
     private var tx = 0f
@@ -136,15 +143,18 @@ class VideoPlayerFragment(
         root.addView(tv, FrameLayout.LayoutParams(-2, -2).apply { gravity = Gravity.CENTER })
         tv.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
+                Utils.log("player: surfaceTextureAvailable ${w}x$h")
                 surface = Surface(st)
                 tryStart()
             }
-            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
+            override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
+                Utils.log("player: surfaceTextureSizeChanged ${w}x$h")
+            }
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                 surface = null
                 return true
             }
-            override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+            override fun onSurfaceTextureUpdated(st: SurfaceTexture) { framesRendered++ }
         }
 
         val pb = M3CircularProgress(ctx)
@@ -301,9 +311,19 @@ class VideoPlayerFragment(
             player.setDataSource(path)
             player.isLooping = true
             player.setOnVideoSizeChangedListener { _, w, h ->
+                Utils.log("player: onVideoSizeChanged ${w}x$h")
                 if (w > 0 && h > 0) { videoW = w; videoH = h; resizeTexture() }
             }
+            player.setOnInfoListener { _, what, extra ->
+                Utils.log("player: onInfo what=$what extra=$extra (framesRendered=$framesRendered)")
+                // MEDIA_INFO_PLAY_VIDEO_ERROR (805, hidden constant): the video track failed — the
+                // device can't decode this video (audio still plays). A healthy video never emits it,
+                // so fall back to the native viewer on the first occurrence (fellBack guards re-entry).
+                if (what == MEDIA_INFO_PLAY_VIDEO_ERROR) fallBackToNative()
+                false
+            }
             player.setOnPreparedListener {
+                Utils.log("player: prepared videoSize=${it.videoWidth}x${it.videoHeight} dur=${it.duration}")
                 spinner?.visibility = View.GONE
                 resizeTexture()
                 it.start()
@@ -326,6 +346,29 @@ class VideoPlayerFragment(
             Utils.log("player: setup failed: $it")
             runCatching { Utils.toast(requireContext(), "视频播放失败") }
             started = false
+        }
+    }
+
+    /**
+     * The device couldn't decode this video (no frames despite playing audio). Toast, dismiss our
+     * player, and hand off to the native viewer (if a fallback was supplied). Guarded to run once.
+     */
+    private fun fallBackToNative() {
+        if (fellBack) return
+        fellBack = true
+        Utils.log("player: undecodable video, falling back to native viewer (cb=${onUndecodable != null})")
+        runCatching { Utils.toast(requireContext(), "无法在手表解码该视频，已转用原生播放器") }
+        val cb = onUndecodable
+        runCatching { mp?.setOnErrorListener(null) }
+        dismissAllowingStateLoss()
+        // Open the native viewer after our dialog is torn down so it lands on top of the chat. The
+        // native cell onClick routes through RFWLayerLaunchUtilKt.d, which we ALSO hook (back to our
+        // own player) — set the one-shot bypass so that launch reaches the real native gallery, not
+        // a loop back into us. Reset after in case onClick short-circuited before launching.
+        if (cb != null) ui.post {
+            momoi.mod.qqpro.hook.RFWGalleryFallback.forceNative = true
+            runCatching { cb.invoke() }
+            momoi.mod.qqpro.hook.RFWGalleryFallback.forceNative = false
         }
     }
 
@@ -388,13 +431,14 @@ class VideoPlayerFragment(
     private fun resizeTexture() {
         val tv = textureView ?: return
         val root = tv.parent as? View ?: return
-        if (videoW <= 0 || videoH <= 0) return
+        if (videoW <= 0 || videoH <= 0) { Utils.log("player: resizeTexture skip videoSize=${videoW}x$videoH"); return }
         val rw = root.width
         val rh = root.height
-        if (rw == 0 || rh == 0) { tv.post { resizeTexture() }; return }
+        if (rw == 0 || rh == 0) { Utils.log("player: resizeTexture root not laid out, retry"); tv.post { resizeTexture() }; return }
         val fit = minOf(rw.toFloat() / videoW, rh.toFloat() / videoH)
         val w = (videoW * fit).toInt()
         val h = (videoH * fit).toInt()
+        Utils.log("player: resizeTexture root=${rw}x$rh video=${videoW}x$videoH -> tv=${w}x$h")
         val lp = tv.layoutParams as FrameLayout.LayoutParams
         if (lp.width != w || lp.height != h) {
             lp.width = w
@@ -438,5 +482,10 @@ class VideoPlayerFragment(
         mp = null
         runCatching { surface?.release() }
         surface = null
+    }
+
+    private companion object {
+        // android.media.MediaPlayer.MEDIA_INFO_PLAY_VIDEO_ERROR — hidden, not in the public SDK.
+        const val MEDIA_INFO_PLAY_VIDEO_ERROR = 805
     }
 }

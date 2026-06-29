@@ -23,6 +23,16 @@ import java.io.File
  * unexpected still works). Top-level @StaticHook fn — same name/signature as the target static; call
  * [RFWLayerLaunchUtilKt.d] to invoke the original.
  */
+/**
+ * One-shot bypass: when the chat video player can't decode a video it hands off to the native viewer
+ * by replaying the cell's native onClick, which routes back through [d]. Set this first so [d] passes
+ * straight through to the original native gallery (a different, more capable player) instead of
+ * re-opening our own player and looping. Consumed (reset) on the next [d] call.
+ */
+object RFWGalleryFallback {
+    @Volatile @JvmField var forceNative = false
+}
+
 @StaticHook(RFWLayerLaunchUtilKt::class)
 fun d(
     context: Context,
@@ -32,6 +42,12 @@ fun d(
     index: Int,
     bundle: Bundle?,
 ) {
+    if (RFWGalleryFallback.forceNative) {
+        RFWGalleryFallback.forceNative = false
+        Utils.log("RFWGalleryHook: forced native fallback (${allMediaInfo.size} media)")
+        RFWLayerLaunchUtilKt.d(context, fragment, imageView, allMediaInfo, index, bundle)
+        return
+    }
     val items = runCatching { allMediaInfo.map { it.toMediaItem() } }.getOrDefault(emptyList())
     val usable = items.any { !it.imageUrl.isNullOrEmpty() || it.imageLocalPath != null || !it.videoUrl.isNullOrEmpty() }
     if (!usable) {

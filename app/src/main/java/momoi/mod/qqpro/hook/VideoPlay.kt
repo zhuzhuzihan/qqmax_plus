@@ -52,9 +52,35 @@ abstract class VideoPlay : BaseWatchItemCell<WatchAIOMsgItem, View>() {
     }
 }
 
-private fun attachVideoClick(cover: View, item: WatchVideoMsgItem) {
-    cover.setOnClickListener { v -> handleVideoClick(item, v) }
+/**
+ * Our replacement cover-click listener. A named class (not an inline lambda) so we can recognise it
+ * on a recycled cover and recover the *native* listener it superseded — see [attachVideoClick].
+ */
+private class VideoCoverClick(
+    val item: WatchVideoMsgItem,
+    val nativeClick: View.OnClickListener?,
+) : View.OnClickListener {
+    override fun onClick(v: View) = handleVideoClick(item, v, nativeClick)
 }
+
+private fun attachVideoClick(cover: View, item: WatchVideoMsgItem) {
+    // The native cell wires its RFW-viewer launch onto the cover in the super.i() that already ran;
+    // capture it before we overwrite, so we can fall back to it for videos our MediaPlayer can't
+    // decode. On a recycled cover the current listener may already be ours — pull the native one
+    // back out of it rather than capturing our own listener (which would lose the native path).
+    val existing = readOnClickListener(cover)
+    val nativeClick = (existing as? VideoCoverClick)?.nativeClick ?: existing
+    Utils.log("VideoPlay: attach cover=${cover.javaClass.simpleName} existing=${existing?.javaClass?.name} native=${nativeClick?.javaClass?.name}")
+    cover.setOnClickListener(VideoCoverClick(item, nativeClick))
+}
+
+/** Read a View's current OnClickListener via reflection (framework greylist; null if unavailable). */
+private fun readOnClickListener(v: View): View.OnClickListener? = runCatching {
+    val getInfo = View::class.java.getDeclaredMethod("getListenerInfo").apply { isAccessible = true }
+    val info = getInfo.invoke(v) ?: return null
+    val field = info.javaClass.getDeclaredField("mOnClickListener").apply { isAccessible = true }
+    field.get(info) as? View.OnClickListener
+}.onFailure { Utils.log("VideoPlay: readOnClickListener failed: $it") }.getOrNull()
 
 /**
  * On each cell rebind, pull the kernel's download progress (FileTransNotifyInfo, carried by a
@@ -67,7 +93,7 @@ private fun captureVideoProgress(item: WatchVideoMsgItem, payloads: List<Any>) {
 
 // 非 @Mixin 普通函数:内部创建的匿名类(Fragment 回调 / lambda / OnClickListener)生成在本包,不会被
 // ApkMixin 拷贝进目标包,避免跨包匿名类构造器不可访问的 IllegalAccessError。
-private fun handleVideoClick(item: WatchVideoMsgItem, v: View) {
+private fun handleVideoClick(item: WatchVideoMsgItem, v: View, nativeClick: View.OnClickListener?) {
     if (runCatching { item.A() }.getOrDefault(false)) {
         runCatching { Utils.toast(v.context, "视频已过期") }
         return
@@ -83,11 +109,15 @@ private fun handleVideoClick(item: WatchVideoMsgItem, v: View) {
     Utils.log("VideoPlay: open player local=$localPath")
 
     val msgId = runCatching { item.d.msgId }.getOrDefault(0L)
+    // When our MediaPlayer can't decode the video (resolution beyond the watch decoder), hand off to
+    // the native RFW viewer by replaying the cover's original click listener we captured at bind.
+    val fallback: (() -> Unit)? = nativeClick?.let { nc -> { runCatching { nc.onClick(v) } } }
     val fragment = VideoPlayerFragment(
         initialPath = localPath,
         needDownload = { runOnUi { runCatching { item.t(true) }.onFailure { Utils.log("VideoPlay: t() failed: $it") } } },
         resolvePath = { localVideoPath(item) },
         progressProvider = { videoProgress(item, msgId) },
+        onUndecodable = fallback,
     )
     runCatching { fragment.show(host.parentFragmentManager, "qqpro_video") }
         .onFailure { Utils.log("VideoPlay: show failed: $it") }
