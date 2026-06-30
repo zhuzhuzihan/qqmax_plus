@@ -156,8 +156,13 @@ class SkipAction(
         // (we don't yet know how many pages we'll fetch) and flips to determinate as soon as upwardMsg/
         // findMsg report a 0..100 percentage — "show the progress whenever possible".
         val onProgress: (Int) -> Unit = { pct ->
-            spinner.indeterminate = false
-            spinner.progress = pct.coerceIn(0, 100) / 100f
+            // Stay indeterminate (spinning) until there's real progress: upwardMsg/findMsg fire
+            // onProgress(0) on the first page, and flipping to determinate there leaves the ring sitting
+            // at a static 0% until the next page lands. Only switch to the fill once pct actually moves.
+            if (pct > 0) {
+                spinner.indeterminate = false
+                spinner.progress = pct.coerceIn(1, 100) / 100f
+            }
         }
         // Jump finished (success or fail): hide the spinner, reset it, and bring the ↑ back.
         val done = {

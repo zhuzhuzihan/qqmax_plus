@@ -25,6 +25,10 @@ fun addSummarizeUnreadButton(parent: FrameLayout, jumpChip: View, topMargin: Int
     val ctx = parent.context
     val spinner = M3CircularProgress(ctx).apply {
         indicatorColor = M3.onPrimary
+        // No track ring: on the primary-colored pill a full 360° track reads as a complete static
+        // circle and masks the growing progress arc (the fill looks "frozen" even though it advances).
+        // Without it, determinate mode shows only the arc growing from the top — an unambiguous fill.
+        trackColor = 0
         visibility = View.GONE
     }
     val tv = TextView(ctx).apply {
@@ -90,8 +94,14 @@ private fun summarizeUnread(anchor: View, jumpChip: View, spinner: M3CircularPro
     spinner.progress = 0f
     spinner.visibility = View.VISIBLE
     val onProgress: (Int) -> Unit = { pct ->
-        spinner.indeterminate = false
-        spinner.progress = pct.coerceIn(0, 100) / 100f
+        // Keep SPINNING (indeterminate) until there's real measurable progress. upwardMsg fires
+        // onProgress(0) synchronously on the first page (before == startSize); flipping to determinate
+        // there cancels the spin animator and leaves a static 0% ring for the whole (large) unread
+        // paging run. Only switch to the determinate fill once pct actually advances.
+        if (pct > 0) {
+            spinner.indeterminate = false
+            spinner.progress = pct.coerceIn(1, 100) / 100f
+        }
     }
     val onFail: () -> Unit = {
         // Reached top before target (history shorter than unread) — just summarize what we have.
