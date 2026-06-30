@@ -30,6 +30,9 @@ class 更新检查 : MainActivity() {
         }
         super.onCreate(savedInstanceState)
         Watchdog.install(this)
+        // The base QQ APK never requests Android 13+ POST_NOTIFICATIONS, so notifications are dropped
+        // until granted. Ask on launch (no-op below API 33 / once already granted).
+        NotificationPermission.ensure(this)
         OTAManager2(this).checkUpdate(false)
         // First launch (never picked a UI style): show the Material-vs-original chooser on top.
         if (!Settings.styleChooserSeen.value) {

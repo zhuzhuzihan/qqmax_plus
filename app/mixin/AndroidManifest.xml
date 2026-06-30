@@ -8,6 +8,13 @@
   text/image/video/audio from other apps. JumpActivity is already exported + the launcher.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Android 13+ runtime notification permission. The base QQ APK doesn't declare it, so on API 33+
+      every notification is blocked until granted; NotificationPermission.ensure() requests it at
+      launch and needs this <uses-permission> present or requestPermissions() no-ops to denied.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application>
         <activity android:name="com.tencent.qqnt.watch.app.JumpActivity">
             <intent-filter>
