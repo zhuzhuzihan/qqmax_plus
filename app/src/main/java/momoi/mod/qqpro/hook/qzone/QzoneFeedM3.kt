@@ -519,13 +519,14 @@ object QzoneFeedCard {
             likeTv.leadingSymbol(MaterialSymbols.thumb_up, if (nowLiked) M3.primary else M3.onSurfaceVariant, 17)
         }
         row.addView(likeTv, LinearLayout.LayoutParams(WRAP, WRAP))
-        // spacer pushes the ⋮ to the right of the same row as 赞
+        // spacer pushes the overflow icon to the right of the same row as 赞
         row.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
-        row.addView(TextView(ctx).apply {
-            text = "⋮"; setTextColor(M3.onSurfaceVariant); textSize = 20f; gravity = Gravity.CENTER
-            setPadding(12.dp, 4.dp, 4.dp, 4.dp); isClickable = true
+        val overflow = symbolImage(ctx, MaterialSymbols.more_vert, M3.onSurfaceVariant, sizeDp = 20).apply {
+            setPadding(12.dp, 4.dp, 4.dp, 4.dp)
+            isClickable = true
             setOnClickListener { QzoneActions.showOverflowMenu(host, data) }
-        }, LinearLayout.LayoutParams(WRAP, WRAP))
+        }
+        row.addView(overflow, LinearLayout.LayoutParams(WRAP, WRAP))
         return row
     }
 
