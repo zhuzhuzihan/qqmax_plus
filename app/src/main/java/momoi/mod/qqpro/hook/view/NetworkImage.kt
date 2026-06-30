@@ -140,7 +140,7 @@ inline fun download(
                     }
                     // Copy in a loop so we can report download progress (Content-Length) for a
                     // determinate indicator; total <= 0 (chunked/unknown) leaves it indeterminate.
-                    val total = connection.contentLengthLong
+                    val total = connection.getHeaderField("Content-Length")?.toLongOrNull() ?: 0L
                     connection.inputStream.use { input ->
                         file.outputStream().use { out ->
                             val buf = ByteArray(16 * 1024)
