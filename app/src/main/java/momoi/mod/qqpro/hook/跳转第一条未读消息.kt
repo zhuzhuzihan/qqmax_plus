@@ -25,7 +25,7 @@ import momoi.mod.qqpro.hook.action.CurrentContact
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.action.RecentContacts
 import momoi.mod.qqpro.hook.view.BubbleTextView
-import momoi.mod.qqpro.hook.view.smoothScrollToStart
+import momoi.mod.qqpro.hook.view.smoothScrollToStartAndFlash
 import momoi.mod.qqpro.lib.FrameScope
 import momoi.mod.qqpro.lib.background
 import momoi.mod.qqpro.lib.clickable
@@ -214,7 +214,7 @@ class SkipAction(
     private fun RecyclerView.safeSmoothToStart(pos: Int) {
         val n = layoutManager?.itemCount ?: 0
         if (n <= 0 || pos < 0) return
-        smoothScrollToStart(if (pos >= n) n - 1 else pos)
+        smoothScrollToStartAndFlash(if (pos >= n) n - 1 else pos)
     }
 }
 @Mixin

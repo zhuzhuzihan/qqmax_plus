@@ -14,7 +14,7 @@ import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.drawable.roundCornerDrawable
 import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.hook.view.BubbleTextView
-import momoi.mod.qqpro.hook.view.smoothScrollToStart
+import momoi.mod.qqpro.hook.view.smoothScrollToStartAndFlash
 import momoi.mod.qqpro.lib.dp
 import momoi.mod.qqpro.lib.material.M3
 import momoi.mod.qqpro.lib.material.M3CircularProgress
@@ -48,7 +48,7 @@ class ReplyClick(
                 finding = false
                 hideLoading()
                 if (item != null) {
-                    rv.smoothScrollToStart(CurrentMsgList.getMsgIndex(item))
+                    rv.smoothScrollToStartAndFlash(CurrentMsgList.getMsgIndex(item))
                 } else {
                     Utils.toast(rv.context, "无法定位消息")
                 }

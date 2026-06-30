@@ -1,10 +1,15 @@
 package momoi.mod.qqpro.hook.view
 
+import android.animation.ValueAnimator
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.Drawable
 import android.util.DisplayMetrics
+import android.view.View
 import androidx.recyclerview.widget.AIOLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
+import momoi.mod.qqpro.lib.material.M3
 
 // How many rows of real animation a jump is allowed to play. Anything farther than this from the
 // current viewport is teleported to within this many rows of the target first, then the short hop is
@@ -46,6 +51,58 @@ fun RecyclerView.smoothScrollToStart(position: Int) {
         return
     }
     startSnapToStart(target)
+}
+
+// Peak alpha (0..255) of the accent flash painted over a jumped-to message row, and how long the
+// whole pulse (fade in → out → in → out) lasts. Two short pulses read clearly as "flash" without
+// lingering long enough to feel like a stuck highlight.
+private const val FLASH_PEAK_ALPHA = 0x66
+private const val FLASH_DURATION_MS = 1100L
+// Max frames to wait for the jump to settle and the target row to attach before giving up on the flash.
+private const val FLASH_MAX_TRIES = 90
+
+/**
+ * Like [smoothScrollToStart], but once the list comes to rest it briefly flashes a translucent accent
+ * over the target message's row so the eye can find where the jump landed. Used by the chat-message
+ * jumps (reply source, jump chip) — NOT the nav/contact lists, which scroll the same way but have no
+ * message worth highlighting.
+ */
+fun RecyclerView.smoothScrollToStartAndFlash(position: Int) {
+    val n = adapter?.itemCount ?: 0
+    if (n <= 0) return
+    val target = position.coerceIn(0, n - 1)
+    smoothScrollToStart(target)
+    // The jump can teleport-then-animate, so the target isn't attached on the first frame. Poll until
+    // the scroll is idle AND the target's ViewHolder exists, then flash it.
+    waitForSettleThenFlash(target, FLASH_MAX_TRIES)
+}
+
+private fun RecyclerView.waitForSettleThenFlash(target: Int, tries: Int) {
+    if (tries <= 0) return
+    val settled = scrollState == RecyclerView.SCROLL_STATE_IDLE
+    val vh = if (settled) findViewHolderForAdapterPosition(target) else null
+    if (vh == null) {
+        postOnAnimation { waitForSettleThenFlash(target, tries - 1) }
+        return
+    }
+    flashRow(vh.itemView)
+}
+
+/** Pulse a translucent accent over [row]'s foreground twice, then restore whatever was there. */
+private fun flashRow(row: View) {
+    val overlay = ColorDrawable(M3.primary)
+    val previous: Drawable? = row.foreground
+    row.foreground = overlay
+    ValueAnimator.ofInt(0, FLASH_PEAK_ALPHA, 0, FLASH_PEAK_ALPHA, 0).apply {
+        duration = FLASH_DURATION_MS
+        addUpdateListener { overlay.alpha = it.animatedValue as Int }
+        addListener(object : android.animation.AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: android.animation.Animator) {
+                row.foreground = previous
+            }
+        })
+        start()
+    }
 }
 
 private fun RecyclerView.startSnapToStart(position: Int) {
