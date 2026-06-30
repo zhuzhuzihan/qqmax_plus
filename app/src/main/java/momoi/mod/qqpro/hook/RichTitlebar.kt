@@ -210,8 +210,98 @@ object RichTitlebar {
             // Re-assert on top after the async ChatFragment view attaches (chat-only overlay).
             bar.bringToFront()
             root.post { bar.bringToFront() }
+            // Hide the bar while the soft keyboard is up (the IME pans/resizes the window and would
+            // otherwise push the title off the top of the watch screen); restore it when the IME hides.
+            attachImeWatcher(bar)
             Utils.log("RichTitlebar: built (name=$name group=$isGroup)")
         }.onFailure { Utils.log("RichTitlebar.build failed: $it") }
+    }
+
+    // The bar's on-screen Y when the keyboard is closed (its un-panned position), captured live so we
+    // can pin the bar back there while the IME is up. Int.MIN_VALUE = not captured yet.
+    private var barBaselineTop: Int = Int.MIN_VALUE
+    private var lastImeOpen: Boolean? = null
+
+    /**
+     * React to soft-keyboard (IME) show/hide for the chat titlebar. The chat window uses
+     * `adjustPan`, so when the keyboard opens the whole window scrolls up and the top-anchored bar is
+     * physically pushed off the screen. Two behaviours, switched by [Settings.hideTitlebarWhenTyping]:
+     *  - ON (default): hide the bar (GONE) while the IME is up — a clean hide that frees the top strip
+     *    instead of the bar half-sliding off during the pan; restore it when the IME closes.
+     *  - OFF: keep the bar visible by pinning it against the pan (translateY back to its closed Y) so
+     *    it doesn't scroll off the top while typing.
+     *
+     * IME visibility comes from the window insets ([WindowInsets.Type.ime], API 30+, accurate under
+     * adjustPan). A global-layout listener on the (attach-time) decor view is the trigger. The
+     * listener is torn down on detach so a closed chat's view tree can be GC'd.
+     */
+    private fun attachImeWatcher(bar: View) {
+        var observed: android.view.ViewTreeObserver? = null
+        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener { applyImeState(bar) }
+        bar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                // Resolve the decor view at ATTACH time — at build time bar.rootView is still the bar
+                // itself, so observing it there would watch the wrong (non-panning) tree.
+                observed = v.rootView.viewTreeObserver.also { it.addOnGlobalLayoutListener(listener) }
+            }
+            override fun onViewDetachedFromWindow(v: View) {
+                runCatching { if (observed?.isAlive == true) observed?.removeOnGlobalLayoutListener(listener) }
+                observed = null
+                barBaselineTop = Int.MIN_VALUE
+                lastImeOpen = null
+            }
+        })
+        if (bar.isAttachedToWindow) {
+            observed = bar.rootView.viewTreeObserver.also { it.addOnGlobalLayoutListener(listener) }
+        }
+    }
+
+    private fun applyImeState(bar: View) {
+        runCatching {
+            val open = isImeVisible(bar)
+            val hideWhenTyping = Settings.hideTitlebarWhenTyping.value
+            val loc = IntArray(2)
+
+            if (!open) {
+                // Keyboard closed: fully restore, and capture the bar's un-panned top as the pin baseline.
+                if (bar.translationY != 0f) bar.translationY = 0f
+                if (bar.visibility != View.VISIBLE) { bar.visibility = View.VISIBLE; bar.bringToFront() }
+                bar.getLocationOnScreen(loc)
+                barBaselineTop = loc[1]
+                if (lastImeOpen != false) { lastImeOpen = false; Utils.log("RichTitlebar: IME closed → show titlebar") }
+                return
+            }
+
+            // Keyboard open.
+            if (hideWhenTyping) {
+                if (bar.translationY != 0f) bar.translationY = 0f
+                if (bar.visibility != View.GONE) bar.visibility = View.GONE
+                if (lastImeOpen != true) { lastImeOpen = true; Utils.log("RichTitlebar: IME open → hide titlebar") }
+            } else {
+                // Keep visible: pin against the pan. Nudge translationY so the bar's on-screen top
+                // returns to its closed baseline. Self-correcting across layout passes (delta→0).
+                if (bar.visibility != View.VISIBLE) { bar.visibility = View.VISIBLE; bar.bringToFront() }
+                if (barBaselineTop != Int.MIN_VALUE) {
+                    bar.getLocationOnScreen(loc)
+                    val delta = barBaselineTop - loc[1]
+                    if (delta != 0) bar.translationY += delta
+                }
+                if (lastImeOpen != true) { lastImeOpen = true; Utils.log("RichTitlebar: IME open → keep titlebar (pinned)") }
+            }
+        }.onFailure { Utils.log("RichTitlebar.applyImeState failed: $it") }
+    }
+
+    /** True when the soft keyboard is currently shown over [v]'s window. */
+    private fun isImeVisible(v: View): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val insets = v.rootWindowInsets ?: return false
+            return insets.isVisible(android.view.WindowInsets.Type.ime())
+        }
+        // Pre-30 fallback (not reached on the watch): keyboard occupies >15% of the window height.
+        val r = android.graphics.Rect()
+        v.getWindowVisibleDisplayFrame(r)
+        val screenH = v.rootView.height
+        return screenH > 0 && screenH - r.bottom > screenH * 0.15
     }
 
     /**

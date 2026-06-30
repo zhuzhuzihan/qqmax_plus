@@ -156,6 +156,10 @@ object Settings {
     // the titlebar header. Works even when the titlebar is off; when on, the header badge is hidden.
     val floatUnreadInChat = BooleanPref("floatUnreadInChat", false)
     val titlebarHeight = FloatPref("titlebarHeight", 16f)
+    // Hide the chat titlebar while typing in the inline input (the IME pans the window up, pushing the
+    // titlebar off the top of the screen / overlapping the field). Restored when the field loses focus.
+    // Default on; turn off to keep the titlebar visible while typing.
+    val hideTitlebarWhenTyping = BooleanPref("hideTitlebarWhenTyping", true)
     // When the titlebar name is too long, scroll it as marquee instead of truncating with "…".
     val titlebarMarquee = BooleanPref("titlebarMarquee", false)
     // Step the "↑ X条新消息" jump chip through the important unread messages (@我/回复/新文件/新公告)
@@ -467,7 +471,7 @@ object Settings {
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
         hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
-        floatUnreadInChat, titlebarHeight, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
+        floatUnreadInChat, titlebarHeight, hideTitlebarWhenTyping, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
