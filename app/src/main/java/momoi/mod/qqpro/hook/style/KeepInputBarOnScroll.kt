@@ -32,11 +32,18 @@ class KeepInputBarOnScroll : `WatchAIOListVB$onCreateView$7`() {
             val vb = a  // captured outer WatchAIOListVB; G = focus-bottom handler, J = InputBarController
             vb.L(AIOMsgListMviIntent.ListScrollDistance(dx, dy, vb.G.f))
             val ctrl = vb.J
+            // Only float the bar when the list is actually scrolled UP — i.e. it can still scroll
+            // down (canScrollVertically(1)) to reach the newest message. At the bottom, where the bar
+            // lives as the list footer, leave it in footer mode. Popping the float here — notably on
+            // the initial scroll-to-bottom when a chat first opens — abandons the touchable footer bar
+            // for a float overlay that lays out off-screen (rootTop ≈ -179, EditText not even in the
+            // view tree), leaving the whole input row visible-but-dead until a reply/@/edit re-pops it.
+            val scrolledUp = recyclerView.canScrollVertically(1)
             // m = showArrowListener; onClick runs showFlowInput → floating overlay (state 2), pinned over
             // the chat. Guarded so it animates in once and then stays floating while scrolling.
             // 全员禁言: don't pop the floating input bar for a muted non-admin — it would surface the
             // EditText that the footer hint hides. Leave the native collapse-to-arrow behavior instead.
-            if (ctrl.g != 2 && !isWholeMutedForSelf()) {
+            if (scrolledUp && ctrl.g != 2 && !isWholeMutedForSelf()) {
                 ctrl.m.onClick(recyclerView)
                 Utils.log("KeepInputBarOnScroll: float popped (state=${ctrl.g})")
             }
