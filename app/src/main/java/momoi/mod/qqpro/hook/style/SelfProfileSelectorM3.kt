@@ -194,8 +194,11 @@ private fun buildBirthM3(native: ViewGroup): View {
 
     val card = listCard(ctx).apply {
         setPadding(8.dp, 8.dp, 8.dp, 8.dp)
+        gravity = Gravity.CENTER_HORIZONTAL
+        // WRAP (not MATCH) so the wheel keeps its natural width and the centering gravity actually
+        // applies — at MATCH_PARENT the 3 NumberPickers sit left-packed inside a full-width picker.
         addView(picker, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         })
     }
