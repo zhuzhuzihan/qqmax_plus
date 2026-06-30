@@ -14,36 +14,84 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import com.tencent.qqnt.account.login.ui.QrLoginFragment
 import momoi.anno.mixin.Mixin
+import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.hook.login.LoginM3
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.util.runOnUi
 
 /**
- * Login screen: tap the QR code to blow it up to (almost) full screen so it's
- * easy to scan, then tap anywhere to dismiss. The enlarged image is a square
- * sized to the smaller of the screen's width/height (round/square watch safe).
+ * Login screen hook. Two behaviours, both delegating to helpers (so the SAM/lambda classes they
+ * generate live in a `momoi.*` package, not inside this @Mixin body copied into QQ's package):
+ *
+ *  - **Always**: tap the QR code to blow it up to (almost) full screen for easy scanning, tap to
+ *    dismiss ([LoginQrZoomHelper]).
+ *  - **When `materializeLogin` is on**: replace the whole page with a from-scratch Material 3 layout
+ *    (QQ Max brand, framed QR, M3 status line + post-scan identity, refresh/phone-login buttons),
+ *    built by [LoginM3] around the live native QR. The login *engine* (QR gen/refresh, the
+ *    `LoginQrCode` state machine) is untouched; we just re-skin and drive a status line from the
+ *    callbacks below. Falls back to the native page if the rebuild throws.
  */
 @Mixin
 class LoginQrZoom : QrLoginFragment() {
     override fun Y(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val root = super.Y(inflater, container, savedInstanceState)
-        // Defer to a helper so the click-listener SAM impls are generated in this
-        // (hook) package rather than inside this @Mixin method body — a body copied
-        // into QQ's package can't construct a listener class from momoi.mod.qqpro.hook.
+        if (Settings.materializeLogin.value) {
+            LoginM3.build(this, root)?.let { return it }
+        }
+        // Non-materialized: native page with just the tap-to-zoom affordance.
         LoginQrZoomHelper.attach(root)
         return root
     }
 
-    // LoginQrCodeStateCallback: Q() = QR scanned, k() = QR expired. Once the QR changes
-    // state the enlarged snapshot is stale (it still shows the old, now-invalid code), so
-    // close the zoom overlay and let the user see the scanned/expired tip underneath.
+    // ── LoginQrCodeStateCallback hooks ───────────────────────────────────────────────────────────
+    // Each calls super (keeps the native engine working) then nudges the M3 status line. When the
+    // page isn't materialized, LoginM3's refs are null so its methods are harmless no-ops. The
+    // QR-changed states (scanned/expired) also dismiss any stale enlarged-QR zoom overlay.
+
+    // P(byte[]) = a fresh QR bitmap is ready to be scanned.
+    override fun P(picBuf: ByteArray?) {
+        super.P(picBuf)
+        LoginM3.onQrReady()
+    }
+
     override fun Q() {
         super.Q()
         LoginQrZoomHelper.dismiss()
+        LoginM3.onScanned()
+    }
+
+    // e(account, accountType, sigCreateTime) = login confirmed on the phone; `account` is the uin.
+    override fun e(account: String, accountType: Int, sigCreateTime: Long) {
+        super.e(account, accountType, sigCreateTime)
+        LoginM3.onConfirmed(account)
+    }
+
+    // t() = QR fetch/refresh in progress.
+    override fun t() {
+        super.t()
+        LoginM3.onLoading()
     }
 
     override fun k() {
         super.k()
         LoginQrZoomHelper.dismiss()
+        LoginM3.onExpired()
+    }
+
+    // r(ret, errMsg) = login failed; m(ret, errMsg) = QR fetch errored.
+    override fun r(ret: Int, errMsg: String?) {
+        super.r(ret, errMsg)
+        LoginM3.onError(errMsg)
+    }
+
+    override fun m(ret: Int, errMsg: String?) {
+        super.m(ret, errMsg)
+        LoginM3.onError(errMsg)
+    }
+
+    override fun onDestroy() {
+        LoginM3.clear()
+        super.onDestroy()
     }
 }
 

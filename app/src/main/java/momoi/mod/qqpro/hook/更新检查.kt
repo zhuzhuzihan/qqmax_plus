@@ -2,6 +2,7 @@ package momoi.mod.qqpro.hook
 
 import android.content.Intent
 import android.os.Bundle
+import com.tencent.mobileqq.app.PrivacyPolicyHelper
 import com.tencent.qqnt.watch.mainframe.MainActivity
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Settings
@@ -19,6 +20,14 @@ import momoi.mod.qqpro.watchdog.Watchdog
 @Mixin
 class 更新检查 : MainActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Remove the TOS/privacy-agreement interstitial: the splash (nav start destination, shown
+        // during this activity's lifecycle, after onCreate) routes to PrivacyLicenseFragment unless
+        // PrivacyPolicyHelper.b() == "1". Pre-mark it agreed here so that gate passes straight through
+        // to login. Gated by materializeLogin; c() (the setter) isn't our hook, so no recursion.
+        if (Settings.materializeLogin.value) {
+            runCatching { PrivacyPolicyHelper.c("1") }
+                .onFailure { Utils.log("LoginM3: pre-agree privacy failed: $it") }
+        }
         super.onCreate(savedInstanceState)
         Watchdog.install(this)
         OTAManager2(this).checkUpdate(false)

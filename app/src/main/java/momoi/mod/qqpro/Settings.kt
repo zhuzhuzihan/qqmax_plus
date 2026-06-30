@@ -99,6 +99,11 @@ object Settings {
     // spinner. Visual only; behaviour is identical. Only has an effect with 聊天页直接输入 on (the inline
     // EditText must exist). Takes effect next time a chat opens. Default on.
     val materializeChat = BooleanPref("materializeChat", true)
+    // Replace the QR-code login page with a from-scratch Material 3 layout (QQ Max brand + app icon,
+    // framed QR, M3 status line + post-scan account avatar/number, refresh & phone-login buttons), and
+    // skip the first-launch privacy-agreement interstitial. The native login engine (QR generation /
+    // refresh / the wtlogin state machine) is untouched — only the chrome is rebuilt. Default on.
+    val materializeLogin = BooleanPref("materializeLogin", true)
     // Screen rounded-corner diameter (in dp). Adds left/right margin of this
     // width to the inline chat EditText so the side buttons aren't clipped by a
     // round watch screen's corners.
@@ -313,7 +318,7 @@ object Settings {
     val styleToggles: List<Pref<Boolean>> get() = listOf(
         materializeChat, materialAttachmentMenu, materialLongPressMenu,
         materialContactsList, materialChatList, materialQZoneBar, materializeQzone,
-        useRichProfile, useM3Settings, contactSections, mainNavCustom,
+        useRichProfile, useM3Settings, materializeLogin, contactSections, mainNavCustom,
     )
 
     // Classic QQ palette written when 原始设计 is picked. The native watch UI is DARK (its list bg is
@@ -466,7 +471,7 @@ object Settings {
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
-        profileNameMultiline, useRichProfile, useM3Settings,
+        profileNameMultiline, useRichProfile, useM3Settings, materializeLogin,
         translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
         multiSelectTimeOrder, multiSelectCopySender,
         screenshotTitlebar, screenshotInputBar, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
