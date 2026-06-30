@@ -12,6 +12,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -35,6 +36,13 @@ class CrashReportActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Block screenshots/screen-recording of this screen so people send the actual log text
+        // (复制 / 导出) instead of an unreadable, truncated screenshot of the report.
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
 
         val kind = intent?.getStringExtra(Watchdog.EXTRA_KIND) ?: Watchdog.KIND_CRASH
         val report = runCatching { Watchdog.reportFile(this).readText() }
