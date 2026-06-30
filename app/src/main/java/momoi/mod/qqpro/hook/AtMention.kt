@@ -187,7 +187,17 @@ private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
 /** Re-run [parseAtMembers] on every tracked content view — call when members load. */
 fun relinkifyAtMembers() {
-    mainHandler.post { atContentViews.toList().forEach { it.parseAtMembers() } }
+    mainHandler.post {
+        // WeakHashMap iteration can throw NoSuchElementException when the GC clears a weak
+        // key between the iterator's hasNext() and next(). The race is transient (the stale
+        // entry is expunged on the next pass), so retry the snapshot a few times; if it still
+        // won't settle, skip this round — relinkify is idempotent and runs again on the next
+        // member update or cell recycle.
+        val views = (0 until 3).firstNotNullOfOrNull {
+            runCatching { atContentViews.toList() }.getOrNull()
+        } ?: return@post
+        views.forEach { it.parseAtMembers() }
+    }
 }
 
 fun TextView.parseAtMembers() {
