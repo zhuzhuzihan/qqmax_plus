@@ -72,6 +72,18 @@ class SummaryViewer private constructor(
         super.onDestroyView()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Force the dialog window to fill the screen so the SwipeBackLayout covers it entirely.
+        // Without this the window wraps its content height; when there's nothing to summarize (the
+        // body stays empty) the weighted ScrollView has no content to stretch it, the window
+        // collapses to the short loading/status row at the top, and a swipe-back below it is dead.
+        dialog?.window?.setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
+        )
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,

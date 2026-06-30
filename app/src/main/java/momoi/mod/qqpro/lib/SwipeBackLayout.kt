@@ -95,7 +95,27 @@ class SwipeBackLayout(context: Context) : FrameLayout(context) {
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                // We only land here for DOWN when NO child consumed it (e.g. an empty screen whose
+                // only content is a centered TextView — no ScrollView to claim the touch). The
+                // framework then routes every following MOVE/UP straight to our onTouchEvent and
+                // never calls onInterceptTouchEvent again, so the intercept path can't start the
+                // drag. Claim the gesture here (unless suppressed) so we keep receiving MOVE and can
+                // begin tracking ourselves below. onInterceptTouchEvent already ran for this same
+                // DOWN and set downX/downY/blockSwipe.
+                Utils.log("SBL: onTouch DOWN claim=${!blockSwipe}")
+                return !blockSwipe
+            }
             MotionEvent.ACTION_MOVE -> {
+                // Direct-dispatch path: start tracking the first time the drag turns horizontal.
+                if (!tracking && !blockSwipe && ev.pointerCount == 1) {
+                    val dx = ev.rawX - downX
+                    val dy = ev.rawY - downY
+                    if (dx > touchSlop && dx > abs(dy) * 1.5f) {
+                        Utils.log("SBL: onTouch start tracking dx=$dx dy=$dy")
+                        tracking = true
+                    }
+                }
                 if (tracking) {
                     val tx = (ev.rawX - downX).coerceAtLeast(0f)
                     translationX = tx

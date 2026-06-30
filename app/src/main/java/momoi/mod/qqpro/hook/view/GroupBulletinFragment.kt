@@ -43,6 +43,18 @@ class GroupBulletinFragment(private val groupCode: Long) : MyDialogFragment() {
         super.onDestroyView()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Force the dialog window to fill the screen so the SwipeBackLayout covers it entirely.
+        // Without this the window wraps its content height; when there are no announcements the
+        // centered "暂无群公告" TextView is the only content, the window collapses to it, and a
+        // swipe-back anywhere outside that small text is dead — trapping the user on the screen.
+        dialog?.window?.setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
+        )
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
