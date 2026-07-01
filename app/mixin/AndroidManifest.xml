@@ -15,6 +15,21 @@
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      Full-screen incoming-call notification (来电通知修复 / CallNotification). The target already
+      declares this, but re-declare it explicitly so QQPro's own call notification's setFullScreenIntent
+      is honoured; for CATEGORY_CALL it is auto-granted (a plain duplicate merges harmlessly).
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!--
+      Draw-over-other-apps. On Android 10+ a foreground service does NOT grant background activity
+      launch, so a full-screen incoming call can't take over the screen from the background. Holding
+      SYSTEM_ALERT_WINDOW (granted by the user in 设置 › 通话 › 授予悬浮窗权限) is a documented BAL
+      exemption, letting 使用全屏来电 startActivity(BeInvitedActivity) directly even when unlocked/in-use.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application>
         <activity android:name="com.tencent.qqnt.watch.app.JumpActivity">
             <intent-filter>
@@ -69,6 +84,12 @@
             android:name="momoi.mod.qqpro.MenuEditorActivity"
             android:exported="false"
             android:excludeFromRecents="true" />
+
+        <!-- 来电通知修复: 接听/拒绝 buttons on the incoming-call notification bind QavManageService and
+             drive its IQavInterface binder. Main process, not exported. -->
+        <receiver
+            android:name="momoi.mod.qqpro.hook.call.CallActionReceiver"
+            android:exported="false" />
     </application>
 
     <!--

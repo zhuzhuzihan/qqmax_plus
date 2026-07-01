@@ -315,6 +315,32 @@ object Settings {
     // OTAManager2's own prefs so the toggle and the dialog's "不再提醒" share one state.
     val autoUpdateCheck = OtaBooleanPref("update_check_enabled", true)
 
+    // ===== 通话 (by AILIFE) =====
+    // Make incoming/ongoing calls reliably notify. QQ only posts an incoming-call full-screen-intent
+    // notification when the app is backgrounded + SDK≥26 + not device-blacklisted, and its call
+    // foreground service is declared without a foregroundServiceType (suppressed on Android 12+). With
+    // this on, QQPro posts its own high-importance incoming-call notification (reusing NotificationAlert's
+    // channel/sound/vibrate) regardless of foreground state, and starts the ongoing-call FGS with an
+    // explicit type. Default on.
+    val callNotifyFix = BooleanPref("callNotifyFix", true)
+    // Incoming-call notification also fires a full-screen intent (launches the native answer screen as a
+    // full takeover, like a phone call) in addition to the heads-up notification (which already carries
+    // the caller name/avatar + 接听/拒绝 buttons). Off = heads-up notification only. Default on. Requires
+    // callNotifyFix.
+    val callFullScreenIntent = BooleanPref("callFullScreenIntent", true)
+    // Route in-call audio to a connected Bluetooth headset (SCO / communication device), and show an
+    // in-call output selector (蓝牙/扬声器/听筒) in the call UI. Off keeps QQ's speaker/earpiece-only
+    // routing. Default on.
+    val callBluetoothRoute = BooleanPref("callBluetoothRoute", true)
+    // Allow starting a VIDEO call on a watch with no camera (to at least see the other side). QQ blocks
+    // this with "当前设备不支持" at two gates (the "+" panel and goToAVScene); with this on we bypass them
+    // and start a receive-only video call (local camera controls hidden). Default on.
+    val callCameralessVideo = BooleanPref("callCameralessVideo", true)
+    // Fully rebuild the incoming + active call screens into a from-scratch Material 3 UI (embeds the
+    // native GL video surface; keeps QQ's call service/lifecycle). Off keeps the native call screens.
+    // Opt-in escape hatch (owns the call screen rendering); default off. Takes effect next call.
+    val materializeCall = BooleanPref("materializeCall", false)
+
     // ===== 界面风格选择 (StyleChooserActivity) =====
     // The user's chosen overall UI style, recorded by the 界面风格 chooser screen. 0 = not chosen yet,
     // 1 = Material design, 2 = Original design. Reserved: kept as a separate signal for possible future
@@ -487,6 +513,7 @@ object Settings {
         translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,
         multiSelectTimeOrder, multiSelectCopySender,
         screenshotTitlebar, screenshotInputBar, screenshotSelfAsOther, screenshotShowIdentity, screenshotWatermark,
+        callNotifyFix, callFullScreenIntent, callBluetoothRoute, callCameralessVideo, materializeCall,
         chatBgDarken, autoUpdateCheck, uiStyle, watchdogEnabled, singleLineInput, sendWithImage, replyWithAt,
         doubleSpeak, doubleReply, allowNotification, residentNotification, notifySoundMode,
         notifyVibrateMode, voiceBtnText, watchdogEnabled, enableLog,

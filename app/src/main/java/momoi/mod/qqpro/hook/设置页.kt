@@ -427,6 +427,30 @@ class 设置页 : SettingsActivity() {
             selector("提醒震动", "新消息震动：关闭 / 应用内模式 / 系统模式", Settings.notifyVibrateMode,
                 listOf("关闭", "应用内", "系统"))
         },
+        SettingsCategory("通话", "语音/视频通话") {
+            section("通话", "音视频通话的通知、蓝牙与界面。部分选项重进通话生效。")
+            switch("来电通知修复", "确保来电有通知：QQ 只在后台且未被机型黑名单时才弹来电，且常失败。开启后由 QQ Max 自行弹出高优先级来电通知，带来电人头像/昵称与「接听/拒绝」按钮", Settings.callNotifyFix)
+            switch("使用全屏来电", "来电时直接全屏拉起原生接听界面(类似电话来电)；关闭则只显示带按钮的横幅通知。需开启「来电通知修复」，并授予下方悬浮窗权限(否则安卓10+无法从后台全屏拉起)", Settings.callFullScreenIntent)
+            actionCard("授予悬浮窗权限", "允许「全屏来电」在锁屏/后台直接拉起接听界面。未授予时仅显示横幅通知") {
+                runCatching {
+                    if (android.os.Build.VERSION.SDK_INT >= 23 &&
+                        !android.provider.Settings.canDrawOverlays(this@设置页)
+                    ) {
+                        startActivity(
+                            Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:$packageName"),
+                            ),
+                        )
+                    } else {
+                        Utils.toast(this@设置页, "已授予悬浮窗权限")
+                    }
+                }.onFailure { Utils.log("overlay perm request failed: $it") }
+            }
+            switch("蓝牙耳机路由", "通话音频自动路由到已连接的蓝牙耳机(SCO/通信设备)，并在通话界面显示输出切换(蓝牙/扬声器/听筒)；关闭则保留 QQ 仅扬声器/听筒的路由", Settings.callBluetoothRoute)
+            switch("无摄像头也可视频通话", "没有摄像头的手表也能发起视频通话(至少看到对方)。QQ 会以「当前设备不支持」在两处拦截，开启后绕过并发起只收不发的视频通话(隐藏本地摄像头控制)", Settings.callCameralessVideo)
+            switch("全新通话界面", "把来电与通话中界面重做为全新的 Material 3 界面(内嵌原生视频画面，沿用 QQ 的通话服务/流程)；关闭则保留原生通话界面。默认关闭，重进通话生效", Settings.materializeCall)
+        },
         SettingsCategory("联系人", "联系人页面") {
             switch("联系人分组", "联系人页用「好友」「群聊」标题分组，通知拆成好友/群两项各带数量，去掉群行末尾图标", Settings.contactSections)
             switch("动态顶栏按钮分散排列", "三个图标按钮平均分布到顶栏全宽(分散)；关闭则紧靠居中排列，适合圆形表盘", Settings.qzoneBarSpread)
