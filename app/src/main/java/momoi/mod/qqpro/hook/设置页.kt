@@ -404,7 +404,8 @@ class 设置页 : SettingsActivity() {
         SettingsCategory("主页导航", "主页底部翻页导航栏") {
             switch("自定义导航栏", "用重绘的导航栏替换原生翻页指示器；关闭则保留原生样式，以下选项不生效", Settings.mainNavCustom)
             switch("导航在底部", "主页(会话列表)翻页导航移到屏幕底部", Settings.bottomMainNav)
-            slider("导航高度", "主页导航图标/栏高度(dp)，默认 16", Settings.mainNavHeight, min = 12f, max = 40f)
+            switch("文字标签导航", "手机风格底部导航：图标下方显示页面名称(消息/联系人/动态/我)，适合在手机上使用。图标大小与文字均随“导航高度”缩放，开启后显示所有页面图标", Settings.mainNavLabels)
+            slider("导航高度", "主页导航图标/栏高度(dp)，默认 16；文字标签导航开启时同样控制图标与文字大小", Settings.mainNavHeight, min = 12f, max = 64f)
             switch("方形铺开", "导航图标在整行均匀铺开，而非聚在中间", Settings.mainNavSquare)
             switch("显示所有页面图标", "每个页面都显示图标，当前页蓝色高亮；关闭则只显示当前页图标、其余为圆点", Settings.mainNavAllIcons)
             switch("显示未读数", "在导航各页面图标上显示未读数红标(设置页除外)：消息页为总未读，联系人页为好友+群通知数", Settings.mainNavUnread)

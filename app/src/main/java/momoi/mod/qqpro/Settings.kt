@@ -171,6 +171,11 @@ object Settings {
     val mainNavCustom = BooleanPref("mainNavCustom", true)
     // Move the home/main page's page-indicator navigation to the bottom of the screen.
     val bottomMainNav = BooleanPref("bottomMainNav", true)
+    // Phone-style labeled bottom nav: show each page's category name as a text label under a
+    // modestly-sized icon (a standard bottom navigation bar) instead of the compact watch icon
+    // strip. Best when running the app on a phone. Ignores 导航高度 (uses a fixed phone-appropriate
+    // icon size) and implies showing every page's icon. Default off.
+    val mainNavLabels = BooleanPref("mainNavLabels", false)
     // Main-page (home) navigation height in dp. Controls the icon/bar size of the page-indicator
     // navigation independently of 标题栏高度. Default 16 (matches the original strip height).
     val mainNavHeight = FloatPref("mainNavHeight", 16f)
