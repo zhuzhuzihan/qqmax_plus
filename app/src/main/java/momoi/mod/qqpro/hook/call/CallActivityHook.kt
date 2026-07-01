@@ -19,9 +19,9 @@ class CallActivityHook : QQNTC2CWatchActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Full M3 call UI (opt-in, default off). Applied after super so the ViewBinding (field `t`) and
-        // the native view wiring exist; MaterialCallUi restyles them in place.
-        if (Settings.materializeCall.value) MaterialCallUi.applyActive(this)
+        // Full M3 call UI (opt-in, default off). onCreate only preps the surface to avoid a native flash;
+        // the real rebuild happens in CallConnHook once QQ has wired the control buttons (onServiceConnected).
+        if (Settings.materializeCall.value) MaterialCallUi.prepActive(this)
     }
 
     override fun onResume() {
