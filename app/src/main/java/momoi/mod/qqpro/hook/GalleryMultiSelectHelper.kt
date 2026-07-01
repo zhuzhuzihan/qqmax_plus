@@ -20,9 +20,12 @@ import moye.wearqq.IMEOperation
 import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.hook.action.GalleryMultiSelectState
+import momoi.mod.qqpro.hook.imageeditor.ImageEditor
+import momoi.mod.qqpro.hook.imageeditor.SendPreviewFragment
 import momoi.mod.qqpro.lib.dp
 import momoi.mod.qqpro.lib.material.M3
 import momoi.mod.qqpro.lib.material.M3Button
+import java.io.File
 
 private const val HTAG = "QQPro"
 
@@ -262,6 +265,22 @@ class GalleryMultiSelectHelper(private val fragment: GalleryFragment) {
                 Utils.log("Gallery single-tap built element for $path: ${describe(element)}")
                 // consume this UP so the item's native click (which would send immediately) doesn't fire
                 interceptNextUp = true
+                // 发送前预览单图: show a preview with 发送 / 编辑 before staging the image. 发送 stages the
+                // original; 编辑 opens the editor and stages the edited result. Only for single-image send.
+                if (Settings.editSingleImageBeforeSend.value) {
+                    val fm = fragment.parentFragmentManager
+                    SendPreviewFragment(
+                        path,
+                        onSend = { attachToImeAndOpen(listOf(element)) },
+                        onEdit = {
+                            ImageEditor.open(fm, File(path)) { edited ->
+                                val el = runCatching { WatchMsgUtil.a.a(edited.path, 0) }.getOrNull()
+                                attachToImeAndOpen(listOf(el ?: element))
+                            }
+                        },
+                    ).show(fm, "qqpro_send_preview")
+                    return true
+                }
                 actionConsumed = true
                 attachToImeAndOpen(listOf(element))
                 return true

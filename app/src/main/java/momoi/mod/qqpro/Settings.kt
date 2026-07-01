@@ -200,6 +200,9 @@ object Settings {
     // preview). When off, the gallery is always in multi-select mode — a tap toggles selection
     // (even for a single item) and you press 发送 to send. Default on.
     val galleryQuickSend = BooleanPref("galleryQuickSend", true)
+    // When sending a SINGLE image, first show a preview where you can 发送 (send now) or 编辑 (open the
+    // image editor). Only affects single-image quick-send. Default off.
+    val editSingleImageBeforeSend = BooleanPref("editSingleImageBeforeSend", false)
     // Use the system image picker (Android photo picker if available, otherwise the
     // SAF document picker) for 相册 instead of QQ's in-app gallery. Avoids needing
     // storage permission and works around in-app picker problems on some devices.
@@ -473,7 +476,7 @@ object Settings {
         hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, hideTitlebarWhenTyping, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
-        galleryQuickSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
+        galleryQuickSend, editSingleImageBeforeSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
         picMaxHeightRatio, longScreenshot, bubbleCornerRadius, bubbleColorSelf, bubbleColorOther, textColor, textColorSelf, linkColor, contactSections, materialContactsList, materialChatList, materialQZoneBar, qzoneBarSpread, qzoneInlineVideo, qzoneMiniAppCard, materializeQzone, qzoneTruncatePost, qzoneTruncateImages,
         profileNameMultiline, useRichProfile, useM3Settings, materializeLogin,
         translateViewLang, translateSendLang, translateShowAllSwitch, translateOwnMessages, translateReplaceInPlace, translateSendButton,

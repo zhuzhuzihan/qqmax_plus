@@ -76,6 +76,7 @@ val LongPressMenuConfig = MenuConfig(
         MenuItemSpec("edit", "编辑", MaterialSymbols.edit),
         MenuItemSpec("partial_copy", "部分复制", MaterialSymbols.content_copy),
         MenuItemSpec("copy_image", "复制图片", MaterialSymbols.image),
+        MenuItemSpec("edit_image", "编辑图片", MaterialSymbols.brush),
         MenuItemSpec("forward", "转发", MaterialSymbols.forward),
         MenuItemSpec("repeat", "复读", MaterialSymbols.repeat),
         MenuItemSpec("multiselect", "多选", MaterialSymbols.check),

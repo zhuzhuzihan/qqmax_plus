@@ -35,6 +35,8 @@ import momoi.mod.qqpro.hook.copyImageFileToClipboard
 import momoi.mod.qqpro.hook.copyImageToClipboard
 import momoi.mod.qqpro.hook.forwardMsgRecord
 import momoi.mod.qqpro.hook.forwardText
+import momoi.mod.qqpro.hook.forwardToFriends
+import momoi.mod.qqpro.hook.imageeditor.ImageEditor
 import momoi.mod.qqpro.hook.repeatMsgRecord
 import momoi.mod.qqpro.hook.shareImageFile
 import momoi.mod.qqpro.hook.shareMessage
@@ -167,6 +169,18 @@ suspend fun buildMessageActions(
     // 转发
     if (msg != null && (caps.fwdText != null || caps.forwardable)) add("forward", "转发", MaterialSymbols.forward) {
         if (caps.forwardable) host.forwardMsgRecord(msg, msgItem) else if (caps.fwdText != null) host.forwardText(caps.fwdText)
+    }
+    // 编辑图片 — edit any image (own/others', incl. the forward/multi-image viewer via pressedEl), then
+    // open the forward selector to choose where to send the result.
+    val editPic = caps.picEl
+    if (editPic != null && fm != null) add("edit_image", "编辑图片", MaterialSymbols.brush) {
+        withPicFile(host, editPic) { file ->
+            ImageEditor.open(fm, file) { edited ->
+                host.forwardToFriends("转发") {
+                    arrayListOf(com.tencent.watch.aio_impl.ext.MsgUtil().a(edited.path, 0))
+                }
+            }
+        }
     }
     // 复读 (resend whole message; not ark/file/combined; live only)
     if (!isHistory && msg != null && (caps.forwardable || caps.fwdText != null) && !caps.isArk)
