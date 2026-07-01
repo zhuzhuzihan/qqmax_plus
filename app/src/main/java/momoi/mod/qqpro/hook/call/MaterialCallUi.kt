@@ -104,7 +104,7 @@ object MaterialCallUi {
 
             val toggles = buildList {
                 if (isVideo && camera != null) {
-                    val c = ctrl(activity, s.toggle, M3.surfaceContainerHigh, MaterialSymbols.videocam, M3.onSurface) { camera.performClick() }
+                    val c = ctrl(activity, s.toggle, M3.surfaceContainerHigh, MaterialSymbols.videocam, M3.onSurface) { CameraCycle.advance(activity, camera) }
                     r.camIcon = c.icon; add(c.view)
                 }
                 if (mic != null) {
@@ -164,12 +164,12 @@ object MaterialCallUi {
     }
 
     fun onVideo(activity: Activity?, localOn: Boolean) {
-        val iv = refs[activity]?.camIcon ?: return
-        iv.post {
-            iv.setImageDrawable(MaterialSymbol(if (localOn) MaterialSymbols.videocam else MaterialSymbols.videocam_off, M3.onSurface))
-            iv.alpha = if (localOn) 1f else 0.6f
-        }
+        // Icon reflects the tri-state cycle (front/back/off), read from the real camera state.
+        (activity as? Activity)?.let { CameraCycle.refreshIcon(it) }
     }
+
+    /** Camera button icon for [activity], so [CameraCycle] can update it to front/back/off. */
+    internal fun camIcon(activity: Activity): ImageView? = refs[activity]?.camIcon
 
     // ---------------------------------------------------------------- from-scratch stage -----------
 
