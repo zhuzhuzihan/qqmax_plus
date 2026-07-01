@@ -93,6 +93,28 @@ object StickerStore {
         }.start()
     }
 
+    /**
+     * Aggregate the stickers of EVERY owned pack, for the picker's global "搜索全部" search. Each pack
+     * is fetched via [loadStickers] (they run in parallel); [onResult] fires once on the UI thread when
+     * all packs have resolved, with the flattened list (pack order preserved as best-effort).
+     */
+    fun loadAllStickers(packs: List<Pack>, onResult: (List<Sticker>) -> Unit) {
+        if (packs.isEmpty()) { post(onResult, emptyList()); return }
+        val byPack = arrayOfNulls<List<Sticker>>(packs.size)
+        val remaining = java.util.concurrent.atomic.AtomicInteger(packs.size)
+        packs.forEachIndexed { i, pack ->
+            loadStickers(pack.epId) { list ->
+                byPack[i] = list
+                if (remaining.decrementAndGet() == 0) {
+                    val all = ArrayList<Sticker>()
+                    byPack.forEach { it?.let(all::addAll) }
+                    Utils.log("StickerStore.loadAllStickers: packs=${packs.size} total=${all.size}")
+                    onResult(all)
+                }
+            }
+        }
+    }
+
     /** Parse the pack detail JSON (top-level `imgs[]`, each `{id,name,wWidthInPhone,wHeightInPhone}`). */
     private fun parsePackJson(epId: Int, jsonPath: String?): List<Sticker> {
         val text = jsonPath?.let { p ->
