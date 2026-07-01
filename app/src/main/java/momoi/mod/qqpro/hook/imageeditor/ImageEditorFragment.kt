@@ -101,7 +101,7 @@ class ImageEditorFragment(
         content.addView(topBar, LinearLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 40.dp))
         content.addView(canvas, LinearLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         bottomBar = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 setColor(M3.surfaceContainer)
                 cornerRadii = floatArrayOf(18.dp.toFloat(), 18.dp.toFloat(), 18.dp.toFloat(), 18.dp.toFloat(), 0f, 0f, 0f, 0f)
@@ -117,6 +117,7 @@ class ImageEditorFragment(
         refreshHistoryButtons()
         StickerStore.loadFav { favStickers = it }   // preload favourites for the sticker tool
         post { maybeShowTutorial() }
+        root.post { Utils.log("ImageEditor sizes: top=${topBar.height} bottom=${bottomBar.height} canvas=${canvas.height} root=${root.height}") }
         return root
     }
 
@@ -204,9 +205,20 @@ class ImageEditorFragment(
         for (v in views) bottomBar.addView(v)
     }
 
+    /** A tool submenu: a fixed ← back on the left + the options in a horizontal scroll (so wide
+     *  option rows like 变换/调整 never clip or overflow the round screen). */
+    private fun toolRow(vararg options: View) {
+        hideAdjustOverlay()
+        bottomBar.removeAllViews()
+        bottomBar.addView(back())
+        val row = LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        for (o in options) row.addView(o)
+        bottomBar.addView(hscroll(row), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    }
+
     private fun showTransform() {
         canvas.mode = EditMode.VIEW
-        subRow(back(),
+        toolRow(
             toolBtn(MaterialSymbols.rotate_right, "旋转90°") { canvas.rotate(true) },
             toolBtn(MaterialSymbols.flip, "水平翻转") { canvas.flip(true) },
             toolBtn(MaterialSymbols.flip_camera_android, "垂直翻转") { canvas.flip(false) })
@@ -226,14 +238,14 @@ class ImageEditorFragment(
 
     private fun showDraw() {
         canvas.mode = EditMode.DRAW
-        subRow(back(),
+        toolRow(
             colorBtn(canvas.drawColor) { chooseColor(canvas.drawColor) { canvas.drawColor = it; showDraw() } },
             toolBtn(MaterialSymbols.tune, "粗细") { promptSize("画笔粗细", canvas.drawWidth, 1f, 40f) { canvas.drawWidth = it } })
     }
 
     private fun showText() {
         canvas.mode = EditMode.TEXT
-        subRow(back(),
+        toolRow(
             colorBtn(textColor) { chooseColor(textColor) { textColor = it; canvas.recolorSelectedText(it); showText() } },
             toolBtn(MaterialSymbols.tune, "大小") {
                 val cur = canvas.selectedPlaced()?.size ?: textSize
@@ -256,7 +268,7 @@ class ImageEditorFragment(
 
     private fun showAdjust() {
         canvas.mode = EditMode.VIEW
-        subRow(back(),
+        toolRow(
             toolBtn(MaterialSymbols.brightness_6, "亮度") { showAdjustOverlay(AdjustParam.BRIGHTNESS) },
             toolBtn(MaterialSymbols.contrast, "对比度") { showAdjustOverlay(AdjustParam.CONTRAST) },
             toolBtn(MaterialSymbols.format_color_reset, "饱和度") { showAdjustOverlay(AdjustParam.SATURATION) })

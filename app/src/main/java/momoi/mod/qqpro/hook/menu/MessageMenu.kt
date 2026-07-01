@@ -35,7 +35,7 @@ import momoi.mod.qqpro.hook.copyImageFileToClipboard
 import momoi.mod.qqpro.hook.copyImageToClipboard
 import momoi.mod.qqpro.hook.forwardMsgRecord
 import momoi.mod.qqpro.hook.forwardText
-import momoi.mod.qqpro.hook.forwardToFriends
+import momoi.mod.qqpro.hook.forwardElementsVia
 import momoi.mod.qqpro.hook.imageeditor.ImageEditor
 import momoi.mod.qqpro.hook.repeatMsgRecord
 import momoi.mod.qqpro.hook.shareImageFile
@@ -174,9 +174,12 @@ suspend fun buildMessageActions(
     // open the forward selector to choose where to send the result.
     val editPic = caps.picEl
     if (editPic != null && fm != null) add("edit_image", "编辑图片", MaterialSymbols.brush) {
+        // Capture the nav fragment NOW (host is attached); after the editor returns the host View may
+        // be detached, so resolving it then gives "no nav fragment" and the forward silently no-ops.
+        val nav = WatchPicElementExtKt.W(host)?.let { WatchPicElementExtKt.Y(it) }
         withPicFile(host, editPic) { file ->
             ImageEditor.open(fm, file) { edited ->
-                host.forwardToFriends("转发") {
+                forwardElementsVia(nav, "转发") {
                     arrayListOf(com.tencent.watch.aio_impl.ext.MsgUtil().a(edited.path, 0))
                 }
             }

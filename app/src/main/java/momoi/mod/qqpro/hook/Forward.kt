@@ -1,6 +1,7 @@
 package momoi.mod.qqpro.hook
 
 import android.view.View
+import androidx.fragment.app.Fragment
 import com.tencent.qqnt.kernel.nativeinterface.Contact
 import com.tencent.qqnt.kernel.nativeinterface.IOperateCallback
 import com.tencent.qqnt.kernel.nativeinterface.MsgElement
@@ -28,16 +29,24 @@ import java.util.concurrent.TimeUnit
  * jar-obfuscated FriendSelectData fields: b = uid, e = isGroup.
  * 0x7e0805cd = R.drawable.icon_share.
  */
-fun View.forwardToFriends(title: String = "转发", buildElements: () -> ArrayList<MsgElement>) {
-    val navFragment = WatchPicElementExtKt.W(this)?.let { WatchPicElementExtKt.Y(it) }
-    if (navFragment == null) {
-        Utils.log("forward: no nav fragment")
+fun View.forwardToFriends(title: String = "转发", buildElements: () -> ArrayList<MsgElement>) =
+    forwardElementsVia(WatchPicElementExtKt.W(this)?.let { WatchPicElementExtKt.Y(it) }, title, buildElements)
+
+/**
+ * Like [forwardToFriends] but takes the nav [fragment] directly instead of resolving it from a View.
+ * Needed when the forward happens AFTER an async detour (e.g. the image editor): by the time the
+ * result comes back the original host View may be detached, so the caller captures the nav fragment
+ * up-front (while attached) and passes it here.
+ */
+fun forwardElementsVia(fragment: Fragment?, title: String = "转发", buildElements: () -> ArrayList<MsgElement>) {
+    if (fragment == null) {
+        Utils.log("forwardElementsVia: no nav fragment")
         return
     }
     val app = MobileQQ.getMobileQQ().peekAppRuntime() ?: return
     val contactService = app.getRuntimeService(IContactRuntimeService::class.java, "")
     contactService.startFriendSelect(
-        navFragment,
+        fragment,
         emptyList(),
         arrayListOf(app.currentUid),
         title,
