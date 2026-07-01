@@ -233,6 +233,16 @@ object MaterialCallUi {
             col.addView(spacer(activity, 0.4f))
         }
         stage.addView(col, matchParent())
+
+        if (isVideo) {
+            // Tap an empty area to hide all overlay chrome so nothing blocks the video; tap again to
+            // show it. Empty taps fall through `col` (not clickable) to the stage; button taps are
+            // consumed by the buttons. Voice mode has no video to reveal, so it stays always-on.
+            stage.isClickable = true
+            stage.setOnClickListener {
+                col.visibility = if (col.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            }
+        }
     }
 
     /** A weightless-in-width, weighted-in-height filler that shares vertical slack in the column. */
