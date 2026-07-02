@@ -22,20 +22,25 @@ class CallServiceHook : QavManageService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val result = super.onStartCommand(intent, flags, startId)
         if (Settings.callNotifyFix.value && intent != null &&
-            intent.getBooleanExtra("key_is_receiver", true) &&
-            !Foreground.isCurrentProcessForeground()
+            intent.getBooleanExtra("key_is_receiver", true)
         ) {
             runCatching {
                 val uin = intent.getStringExtra("key_peer_uin") ?: ""
                 val nick = intent.getStringExtra("key_peer_nick")
                 val onlyAudio = intent.getBooleanExtra("key_is_only_audio", true)
-                // 使用全屏来电 + overlay permission → take over the screen directly (real call takeover).
-                // Otherwise fall back to the heads-up notification (which carries its own full-screen
-                // intent for the lock-screen case, plus the caller name/avatar + 接听/拒绝 buttons).
-                val launched = Settings.callFullScreenIntent.value &&
-                    CallNotification.launchFullScreen(this, uin, onlyAudio)
-                if (!launched) CallNotification.postIncoming(this, uin, nick, onlyAudio)
-            }.onFailure { Utils.log("CallServiceHook: post incoming failed: $it") }
+                // Let a Bluetooth/wired headset hook button answer the ring (works whether the native
+                // answer screen is foreground or we're backgrounded).
+                HeadsetAnswer.startRinging(this, uin, onlyAudio)
+                // Notification takeover only matters when backgrounded (foreground shows the native screen).
+                if (!Foreground.isCurrentProcessForeground()) {
+                    // 使用全屏来电 + overlay permission → take over the screen directly (real call takeover).
+                    // Otherwise fall back to the heads-up notification (which carries its own full-screen
+                    // intent for the lock-screen case, plus the caller name/avatar + 接听/拒绝 buttons).
+                    val launched = Settings.callFullScreenIntent.value &&
+                        CallNotification.launchFullScreen(this, uin, onlyAudio)
+                    if (!launched) CallNotification.postIncoming(this, uin, nick, onlyAudio)
+                }
+            }.onFailure { Utils.log("CallServiceHook: incoming handling failed: $it") }
         }
         return result
     }

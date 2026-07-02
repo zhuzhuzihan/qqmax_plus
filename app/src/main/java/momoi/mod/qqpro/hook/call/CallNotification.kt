@@ -111,6 +111,7 @@ object CallNotification {
 
     fun cancelIncoming(context: Context) {
         runCatching { NotificationManagerCompat.from(context).cancel(NOTIFY_ID) }
+        HeadsetAnswer.stop() // ring dismissed (accepted/rejected/ended) — release the media session
     }
 
     private fun actionPi(

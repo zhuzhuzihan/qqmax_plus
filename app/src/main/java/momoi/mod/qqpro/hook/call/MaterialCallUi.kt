@@ -295,37 +295,22 @@ object MaterialCallUi {
 
     // ---------------------------------------------------------------- audio output selector --------
 
-    private var routeIndex = -1
     private var outIcon: ImageView? = null
 
     private fun outputButton(activity: Activity, s: Sz): View {
-        val c = ctrl(activity, s.toggle, M3.surfaceContainerHigh, MaterialSymbols.volume_up, M3.onSurface) { cycleRoute(activity) }
+        val c = ctrl(activity, s.toggle, M3.surfaceContainerHigh, MaterialSymbols.volume_up, M3.onSurface) { CallAudio.cycle(activity) }
         outIcon = c.icon
+        // Mirror the ACTUALLY applied route (auto-default to BT, hotplug, cycling) onto our icon.
+        CallAudio.setRouteListener { route ->
+            outIcon?.setImageDrawable(MaterialSymbol(routeIcon(route), M3.onSurface))
+        }
         return c.view
     }
 
-    private fun cycleRoute(activity: Activity) {
-        runCatching {
-            val routes = CallAudioRouter.availableRoutes(activity)
-            if (routes.size < 2) { Utils.toast(activity, "无其它音频输出"); return }
-            routeIndex = (routeIndex + 1) % routes.size
-            val route = routes[routeIndex]
-            CallAudioRouter.route(activity, route)
-            outIcon?.setImageDrawable(MaterialSymbol(routeIcon(route), M3.onSurface))
-            Utils.toast(activity, routeLabel(route))
-        }.onFailure { Utils.log("MaterialCallUi: cycleRoute failed: $it") }
-    }
-
-    private fun routeIcon(route: CallAudioRouter.Route) = when (route) {
-        CallAudioRouter.Route.BLUETOOTH -> MaterialSymbols.bluetooth
-        CallAudioRouter.Route.SPEAKER -> MaterialSymbols.volume_up
-        CallAudioRouter.Route.EARPIECE -> MaterialSymbols.phone_in_talk
-    }
-
-    private fun routeLabel(route: CallAudioRouter.Route) = when (route) {
-        CallAudioRouter.Route.BLUETOOTH -> "蓝牙耳机"
-        CallAudioRouter.Route.SPEAKER -> "扬声器"
-        CallAudioRouter.Route.EARPIECE -> "听筒"
+    private fun routeIcon(route: CallAudio.Route) = when (route) {
+        CallAudio.Route.BLUETOOTH -> MaterialSymbols.bluetooth
+        CallAudio.Route.SPEAKER -> MaterialSymbols.volume_up
+        CallAudio.Route.EARPIECE -> MaterialSymbols.phone_in_talk
     }
 
     // ---------------------------------------------------------------- helpers ----------------------
