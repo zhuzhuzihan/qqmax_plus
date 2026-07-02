@@ -120,7 +120,13 @@ object ManifestMerger {
     private fun setAttr(node: Axml.Node, ns: String?, name: String, rawValue: String) {
         val isAndroid = ns == ANDROID_NS
         val attrNs = if (isAndroid) ANDROID_NS else null
-        val resourceId = if (isAndroid) ResourceIdXmlReader.parseIdFromXml(name) else -1
+        // meditor's public.xml table is missing some newer android attrs (e.g. foregroundServiceType);
+        // fall back to a small hardcoded map so they resolve instead of being written id-less (which
+        // the platform silently ignores).
+        val resourceId = if (isAndroid) {
+            ResourceIdXmlReader.parseIdFromXml(name).takeIf { it != -1 }
+                ?: ANDROID_ATTR_FALLBACK[name] ?: -1
+        } else -1
         val (type, value) = typeAndValue(rawValue)
         node.attrs.removeAll { it.name == name && it.ns == attrNs }
         node.attr(attrNs, name, resourceId, type, value)
@@ -137,6 +143,11 @@ object ManifestMerger {
     }
 
     private fun Char.isHex() = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
+
+    /** android attr resource ids missing from meditor's public.xml table (name → platform R.attr id). */
+    private val ANDROID_ATTR_FALLBACK = mapOf(
+        "foregroundServiceType" to 0x01010599, // android.R.attr.foregroundServiceType (API 28)
+    )
 
     private fun androidName(el: Element): String? =
         el.getAttributeNS(ANDROID_NS, "name").takeIf { it.isNotEmpty() }

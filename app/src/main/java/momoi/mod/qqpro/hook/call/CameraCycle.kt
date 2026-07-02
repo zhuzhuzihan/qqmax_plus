@@ -35,6 +35,8 @@ object CameraCycle {
 
     /** Advance the camera one step in the cycle, driven by the real current state. */
     fun advance(activity: Activity, nativeToggle: View) {
+        // While screen sharing, the button is a "stop share" control instead of a camera cycle.
+        if (ScreenShare.sharing) { ScreenShare.toggle(activity); return }
         runCatching {
             val ctx: Context = activity
             val on = isOn()
@@ -76,11 +78,12 @@ object CameraCycle {
         val on = isOn()
         val front = isFront(ctx)
         val glyph = when {
+            ScreenShare.sharing -> MaterialSymbols.stop
             !on -> MaterialSymbols.videocam_off
             front -> MaterialSymbols.videocam
             else -> MaterialSymbols.flip_camera_android
         }
-        val alpha = if (on) 1f else 0.6f
+        val alpha = if (on || ScreenShare.sharing) 1f else 0.6f
         iv.post {
             iv.setImageDrawable(MaterialSymbol(glyph, M3.onSurface))
             iv.alpha = alpha

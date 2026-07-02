@@ -105,6 +105,8 @@ object MaterialCallUi {
             val toggles = buildList {
                 if (isVideo && camera != null) {
                     val c = ctrl(activity, s.toggle, M3.surfaceContainerHigh, MaterialSymbols.videocam, M3.onSurface) { CameraCycle.advance(activity, camera) }
+                    // Long-press starts screen share; while sharing, a plain tap stops it (no long-press).
+                    c.view.setOnLongClickListener { if (!ScreenShare.sharing) ScreenShare.toggle(activity); true }
                     r.camIcon = c.icon; add(c.view)
                 }
                 if (mic != null) {
@@ -170,6 +172,9 @@ object MaterialCallUi {
 
     /** Camera button icon for [activity], so [CameraCycle] can update it to front/back/off. */
     internal fun camIcon(activity: Activity): ImageView? = refs[activity]?.camIcon
+
+    /** Refresh the camera button icon on any live call stage (e.g. when screen share starts/stops). */
+    fun refreshCameraIcons() = refs.keys.toList().forEach { CameraCycle.refreshIcon(it) }
 
     // ---------------------------------------------------------------- from-scratch stage -----------
 
