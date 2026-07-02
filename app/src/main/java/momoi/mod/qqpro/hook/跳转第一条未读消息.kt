@@ -12,7 +12,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tencent.aio.api.list.IListUIOperationApi
 import com.tencent.mvi.api.help.CreateViewParams
 import com.tencent.watch.aio_impl.coreImpl.vb.WatchAIOListVB
-import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.MsgUtil
 import momoi.mod.qqpro.Settings
@@ -64,8 +63,7 @@ class SkipAction(
 
     private fun format(count: Int) = "↑ ${count}条新消息"
     private val unreadTotal = recent.unreadCntCached
-    private var count = unreadTotal                 // remaining unread toward the first-unread stop
-    private var lastUnreadMsg: WatchAIOMsgItem? = null
+    private var count = unreadTotal                 // remaining unread toward the first-unread stop (label only)
     private var isClicked = false
     private var isFinished = false
 
@@ -92,7 +90,9 @@ class SkipAction(
     /** The chip text WITHOUT the leading ↑ (terminal stop shows the live remaining count). */
     private fun bodyLabel(): String {
         val h = head() ?: return ""
-        return if (h.seq == null) "${count}条新消息" else h.label
+        // Clamp: the count heuristic can undershoot to 0/negative once history is paged in, and
+        // "↑ -2条新消息" is nonsense to show.
+        return if (h.seq == null) "${count.coerceAtLeast(0)}条新消息" else h.label
     }
 
     /**
@@ -135,7 +135,6 @@ class SkipAction(
                 val newCount = unreadTotal - list.size + first
                 if (newCount < count) {
                     count = newCount
-                    lastUnreadMsg = list.getOrNull(first)
                     dirty = true
                 }
 
@@ -187,25 +186,30 @@ class SkipAction(
         refreshLabel(loading = true)
         if (h.seq != null) {
             // Important stop: locate the exact message (paging up if needed) and smooth-scroll to it.
-            // The scroll listener pops it and advances to the next stop once it lands in view.
             CurrentMsgList.findMsg(h.seq, onProgress, result = { msg ->
                 if (msg == null) { onFail(); return@findMsg }
+                // Consume this stop NOW instead of waiting for the scroll listener to pop it: when the
+                // target is already on screen the smooth-scroll is a no-op, so onScrolled never fires and
+                // the chip would stay stuck on this stop forever (never advancing to the terminal
+                // "first unread" jump). Popping on tap guarantees the stepper always progresses.
+                if (head()?.seq == h.seq) points.removeFirstOrNull()
+                val idx = CurrentMsgList.getMsgIndex(msg)
+                Utils.log("SkipAction: jumped seq=${h.seq} -> idx=$idx, next=${head()?.label}")
                 done()
-                rv.safeSmoothToStart(CurrentMsgList.getMsgIndex(msg))
+                rv.safeSmoothToStart(idx)
             })
-        } else when {
-            // Terminal first-unread stop, jumped the count-based way (no single msgSeq).
-            lastUnreadMsg != null ->
-                CurrentMsgList.upwardMsg(CurrentMsgList.getMsgIndex(lastUnreadMsg!!), count, onProgress, onFail) {
-                    done()
-                    rv.safeSmoothToStart(it)
-                }
-            list.isNotEmpty() && count > 0 ->
-                CurrentMsgList.upwardMsg(list.size - 1, count - 1, onProgress, onFail) {
-                    done()
-                    rv.safeSmoothToStart(it)
-                }
-            else -> done()
+        } else {
+            // Terminal "first unread" stop. Jump deterministically to the ORIGINAL first unread
+            // (unreadTotal messages up from the newest) rather than the running `count`, which the
+            // earlier important-stop jumps corrupt: paging in history drives it to 0/negative, which
+            // made this branch silently no-op and left the chip stuck on screen. Retire it once done.
+            if (list.isEmpty() || unreadTotal <= 0) { done(); hide(); return }
+            CurrentMsgList.upwardMsg(list.size - 1, (unreadTotal - 1).coerceAtLeast(0), onProgress, onFail) { idx ->
+                Utils.log("SkipAction: terminal jump -> first-unread idx=$idx (unreadTotal=$unreadTotal)")
+                done()
+                rv.safeSmoothToStart(idx)
+                hide()
+            }
         }
     }
 
