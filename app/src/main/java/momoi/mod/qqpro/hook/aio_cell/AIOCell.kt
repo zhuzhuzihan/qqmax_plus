@@ -344,8 +344,10 @@ object AIOCell {
             // Append-mode hooks (reply) keep contentWidget, so still linkify those.
             if (matched == null || matched.appendMode) {
                 (widget.contentWidget as? TextView)?.let {
-                    it.linkify()
+                    // Match @mention usernames FIRST so they win over URL/number matching: linkify()
+                    // skips any range already covered by a mention span (see Linkify.overlapsReserved).
                     it.parseAtMembers()
+                    it.linkify()
                     // Reset the content AND every wrapper LinearLayout it sits inside back to
                     // "hug content". When this cell is recycled from one that had a
                     // +1/link-preview/special view, the content stays wrapped in one (or, from

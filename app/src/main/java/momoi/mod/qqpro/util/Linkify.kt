@@ -106,10 +106,19 @@ fun TextView.linkify() {
     val spannable = SpannableStringBuilder(text)
     val existingSpans = spannable.getSpans(0, spannable.length, URLSpan::class.java)
     existingSpans.forEach { spannable.removeSpan(it) }
+    // Username @mentions are matched first (parseAtMembers runs before linkify) and always win: a URL
+    // or number match that overlaps an already-linked mention span is skipped, so e.g. a nickname that
+    // looks like a bare host / number stays a single tappable mention rather than being cut up.
+    val reserved: List<Pair<Int, Int>> = spannable
+        .getSpans(0, spannable.length, ClickableSpan::class.java)
+        .map { spannable.getSpanStart(it) to spannable.getSpanEnd(it) }
+    fun overlapsReserved(s: Int, e: Int): Boolean = reserved.any { (rs, re) -> s < re && rs < e }
     val matcher = currentUrlPattern().matcher(spannable)
     val links = mutableListOf<Pair<Int, Int>>()
     while (matcher.find()) {
-        links.add(matcher.start() to matcher.end())
+        if (!overlapsReserved(matcher.start(), matcher.end())) {
+            links.add(matcher.start() to matcher.end())
+        }
     }
     links.reversed().forEach { (start, end) ->
         val url = spannable.substring(start, end)
@@ -138,7 +147,7 @@ fun TextView.linkify() {
         while (numMatcher.find()) {
             val ns = numMatcher.start()
             val ne = numMatcher.end()
-            if (links.none { (s, e) -> ns < e && s < ne }) {
+            if (links.none { (s, e) -> ns < e && s < ne } && !overlapsReserved(ns, ne)) {
                 numbers.add(ns to ne)
             }
         }

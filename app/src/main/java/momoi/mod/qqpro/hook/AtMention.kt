@@ -144,11 +144,17 @@ private fun View.navigateToProfile(profileData: ProfileData) {
 private fun MemberInfo.showName(): String =
     cardName.ifEmpty { remark.ifEmpty { nick.ifEmpty { uin.toString() } } }
 
+/** Marker for the clickable spans this file adds for @mention usernames. Lets a re-linkify (when the
+ *  member list arrives after linkify() already ran) tell its OWN mention spans — skip, so the pass
+ *  stays idempotent — from URL/number spans added by [momoi.mod.qqpro.util.linkify], which are removed
+ *  so the username always wins over a nickname that happens to look like a host/number. */
+internal interface MentionSpan
+
 /** A ClickableSpan that opens [member]'s profile card. Uses the user's link color override when
  *  set (so links/numbers/mentions share one color), else the Material accent. When [isSelf] is set
  *  (the mention targets you, and 高亮@我 is on) it's painted in the Material error color instead, so
  *  a mention of yourself stands out from ordinary mentions. */
-private fun memberSpan(member: MemberInfo, isSelf: Boolean): ClickableSpan = object : ClickableSpan() {
+private fun memberSpan(member: MemberInfo, isSelf: Boolean): ClickableSpan = object : ClickableSpan(), MentionSpan {
     override fun onClick(widget: View) = widget.openMemberProfile(member)
     override fun updateDrawState(ds: TextPaint) {
         // Resolve against the current (body) text color so the @mention contrasts its own bubble.
@@ -161,9 +167,9 @@ private fun memberSpan(member: MemberInfo, isSelf: Boolean): ClickableSpan = obj
 private fun MemberInfo.isSelfMember(): Boolean =
     uid.isNotEmpty() && uid == SelfContact.peerUid
 
-/** True if any ClickableSpan already covers [start,end) in [sp]. */
-private fun hasClickableSpan(sp: Spannable, start: Int, end: Int): Boolean =
-    sp.getSpans(start, end, ClickableSpan::class.java).any {
+/** ClickableSpans truly overlapping [start,end) in [sp] (getSpans is loose at boundaries). */
+private fun clickableSpansIn(sp: Spannable, start: Int, end: Int): List<ClickableSpan> =
+    sp.getSpans(start, end, ClickableSpan::class.java).filter {
         sp.getSpanStart(it) < end && start < sp.getSpanEnd(it)
     }
 
@@ -224,7 +230,12 @@ fun TextView.parseAtMembers() {
             val match = named.firstOrNull { rest.startsWith(it.first) }
             if (match != null) {
                 val end = i + 1 + match.first.length
-                if (!hasClickableSpan(sp, i, end)) {
+                val overlapping = clickableSpansIn(sp, i, end)
+                // Skip only if we've already linked this mention (idempotent re-linkify). Any other
+                // clickable span here is a URL/number span from linkify() that ran first — remove it
+                // so the username wins ("matched before anything else").
+                if (overlapping.none { it is MentionSpan }) {
+                    overlapping.forEach { sp.removeSpan(it) }
                     val isSelf = Settings.highlightSelfMention.value && match.second.isSelfMember()
                     sp.setSpan(memberSpan(match.second, isSelf), i, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
                     added = true
