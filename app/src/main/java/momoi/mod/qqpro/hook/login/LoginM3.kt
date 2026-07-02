@@ -48,6 +48,10 @@ object LoginM3 {
     @Volatile private var spinner: ImageView? = null
     // uin learned at the SCANNED stage (ret 53), before phone-confirm. Null until a scan happens.
     @Volatile private var scannedUin: String? = null
+    // uin whose avatar is currently loaded into bigAvatar. The login poll re-fires the scanned/confirmed
+    // callbacks every few seconds while waiting for phone confirmation; without this guard every call
+    // cleared the photo (→ gray placeholder) and re-downloaded it, so the avatar flickered gray→photo.
+    @Volatile private var loadedAvatarUin: String? = null
 
     /** Called by [LoginScanObserver] when the QR is scanned — stash the account uin for the UI. */
     fun captureScannedUin(uin: String?) {
@@ -57,7 +61,7 @@ object LoginM3 {
 
     fun clear() {
         loginFrag = null; qrView = null; bigAvatar = null; nameText = null
-        refreshOverlay = null; statusText = null; spinner = null; scannedUin = null
+        refreshOverlay = null; statusText = null; spinner = null; scannedUin = null; loadedAvatarUin = null
     }
 
     fun build(frag: QrLoginFragment, nativeRoot: View?): View? {
@@ -168,6 +172,7 @@ object LoginM3 {
     /** Fresh QR available — restore the QR, drop any captured identity. */
     fun onQrReady() {
         scannedUin = null
+        loadedAvatarUin = null
         update {
             qrView?.visibility = View.VISIBLE
             bigAvatar?.visibility = View.GONE
@@ -201,11 +206,18 @@ object LoginM3 {
         val av = bigAvatar ?: return@update
         av.visibility = View.VISIBLE
         if (!uin.isNullOrBlank()) {
-            av.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(M3.surfaceContainerHigh) }
-            av.setImageDrawable(null)
-            av.runCatching { loadPicUrl(avatarUrl(uin)) }
+            // Only (re)load when the account actually changed. The poll re-fires these callbacks
+            // repeatedly for the same uin; reloading each time cleared the photo to the gray
+            // placeholder and re-downloaded, causing a periodic gray flicker over the avatar.
+            if (uin != loadedAvatarUin) {
+                loadedAvatarUin = uin
+                av.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(M3.surfaceContainerHigh) }
+                av.setImageDrawable(null)
+                av.runCatching { loadPicUrl(avatarUrl(uin)) }
+            }
             nameText?.let { it.visibility = View.VISIBLE; it.text = uin }
         } else {
+            loadedAvatarUin = null
             // No uin available — show a simple "scanned" check instead of the avatar.
             av.background = null
             av.setImageDrawable(MaterialSymbol(MaterialSymbols.check, M3.primary))
