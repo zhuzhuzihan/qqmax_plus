@@ -29,7 +29,10 @@ import momoi.mod.qqpro.hook.translate.MessageTranslate
 import momoi.mod.qqpro.lib.create
 import momoi.mod.qqpro.hook.parseAtMembers
 import momoi.mod.qqpro.util.linkify
+import com.tencent.watch.aio_impl.ui.cell.av.WatchQavItem
 import momoi.mod.qqpro.lib.material.M3
+import momoi.mod.qqpro.lib.material.MaterialSymbol
+import momoi.mod.qqpro.lib.material.MaterialSymbols
 import momoi.mod.qqpro.util.parseHexColor
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.warpOnce
@@ -60,6 +63,10 @@ object AIOCell {
         fun walk(v: View) {
             if (v is TextView) {
                 v.setTextColor(color)
+                // Keep any Material-symbol icon (e.g. the call-record phone/video icon) matched to the
+                // message text color, including custom overrides.
+                (v.compoundDrawables.asSequence() + v.compoundDrawablesRelative.asSequence())
+                    .forEach { (it as? MaterialSymbol)?.recolor(color) }
             }
             if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
         }
@@ -379,6 +386,25 @@ object AIOCell {
                             depth++
                         }
                         Utils.log(sb.toString())
+                    }
+                }
+            }
+            // 通话记录图标: on a call-record bubble (通话时长 …) swap the native phone/video BITMAP
+            // (aio_telephone_filled_icon_white / aio_video_on_filled_icon_white, fixed 32px) for a Material
+            // vector, scaled to the text size. Done here (after native bind) rather than by @Mixin'ing the
+            // cell's generic d(K,T,…) — that broke super-routing (AbstractMethodError). applyMsgTextStyle
+            // below then recolors this MaterialSymbol to match the text.
+            if (item is WatchQavItem) runCatching {
+                (widget.contentWidget as? TextView)?.let { tv ->
+                    val size = (tv.textSize * 1.2f).toInt()
+                    if (size > 0) {
+                        val icon = MaterialSymbol(
+                            if (item.r) MaterialSymbols.videocam else MaterialSymbols.call,
+                            tv.currentTextColor,
+                        )
+                        icon.setBounds(0, 0, size, size)
+                        tv.setCompoundDrawablesRelative(icon, null, null, null)
+                        tv.compoundDrawablePadding = (size * 0.28f).toInt()
                     }
                 }
             }
