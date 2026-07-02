@@ -162,6 +162,9 @@ object Settings {
     val hideTitlebarWhenTyping = BooleanPref("hideTitlebarWhenTyping", true)
     // When the titlebar name is too long, scroll it as marquee instead of truncating with "…".
     val titlebarMarquee = BooleanPref("titlebarMarquee", false)
+    // Titlebar background: when on (default), a surface gradient fading to transparent at the bottom
+    // (chat content disappears gradually behind the bar); when off, a solid opaque surface fill.
+    val titlebarGradient = BooleanPref("titlebarGradient", true)
     // Step the "↑ X条新消息" jump chip through the important unread messages (@我/回复/新文件/新公告)
     // one at a time, bottom→top, before the final jump to the first unread. Off = the chip jumps
     // straight to the first unread as before.

@@ -175,7 +175,7 @@ object RichTitlebar {
             // transparent at the bottom, so chat content scrolling up disappears gradually behind the
             // bar (bottom→top fade) while the title/badge stay readable. Uses the M3 surface token.
             val surfaceTop = M3.surface or 0xFF_000000.toInt()
-            val surfaceBottom = M3.surface and 0x00_FFFFFF
+            val surfaceBottom = if (Settings.titlebarGradient.value) M3.surface and 0x00_FFFFFF else surfaceTop
             bar.background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(surfaceTop, surfaceBottom)

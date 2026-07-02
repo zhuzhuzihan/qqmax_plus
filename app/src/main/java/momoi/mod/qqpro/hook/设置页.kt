@@ -398,6 +398,7 @@ class 设置页 : SettingsActivity() {
             switch("逐条跳转重要消息", "“↑X条新消息”按钮依次跳到 @我/回复/新文件/新公告 等重要消息(自下而上)，到达后自动切换下一条，最后停在第一条未读", Settings.chatImportantJump)
             switch("打字时隐藏标题栏", "弹出软键盘输入时隐藏标题栏腾出屏幕空间，键盘收起后自动恢复", Settings.hideTitlebarWhenTyping)
             switch("标题栏名称滚动", "标题栏名称过长时滚动显示，而非省略号截断(重进聊天页生效)", Settings.titlebarMarquee)
+            switch("标题栏渐变背景", "标题栏背景向下渐隐(聊天内容滚上时逐渐隐没在栏后)；关闭则为纯色不透明填充(重进聊天页生效)", Settings.titlebarGradient)
             slider("标题栏高度", "富标题栏高度(dp)，默认 16", Settings.titlebarHeight, min = 16f, max = 32f)
             slider("标题栏左右边距", "富标题栏与未读红标左右留出的空白(dp)，避免圆屏圆角裁切", Settings.titlebarSideMargin, min = 0f, max = 48f)
         },
