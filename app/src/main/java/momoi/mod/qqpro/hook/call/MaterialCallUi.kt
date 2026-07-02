@@ -229,8 +229,13 @@ object MaterialCallUi {
                 }
             }
             if (!uin.isNullOrBlank()) avatar.loadPicUrl("https://q.qlogo.cn/headimg_dl?dst_uin=$uin&spec=140", "call_avatar_$uin")
+            // Wrap the avatar in a voice-activity ring that pulses with the call audio (see VoiceActivityRing).
+            val ring = VoiceActivityRing(activity).apply {
+                addView(avatar, FrameLayout.LayoutParams(s.avatar, s.avatar, Gravity.CENTER))
+            }
+            val ringSize = (s.avatar * 1.3f).toInt()
             col.addView(spacer(activity, 1.4f))
-            col.addView(avatar, LinearLayout.LayoutParams(s.avatar, s.avatar))
+            col.addView(ring, LinearLayout.LayoutParams(ringSize, ringSize))
             col.addView(nameView, wrap().apply { topMargin = s.gap })
             col.addView(status, wrap().apply { topMargin = s.gap / 2 })
             col.addView(spacer(activity, 0.9f))
