@@ -46,6 +46,8 @@ object CallOutputSelector {
                     setColor(M3.surfaceContainerHigh)
                 }
                 setOnClickListener { CallAudio.cycle(activity) }
+                // Long-press opens the call-volume selector (the watch has no volume rocker in-call).
+                setOnLongClickListener { CallVolume.toggle(activity); true }
             }
             val lp = FrameLayout.LayoutParams(sizePx, sizePx, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
             lp.topMargin = (minDim * 0.06f).toInt()

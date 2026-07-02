@@ -300,6 +300,8 @@ object MaterialCallUi {
     private fun outputButton(activity: Activity, s: Sz): View {
         val c = ctrl(activity, s.toggle, M3.surfaceContainerHigh, MaterialSymbols.volume_up, M3.onSurface) { CallAudio.cycle(activity) }
         outIcon = c.icon
+        // Long-press the output button opens the call-volume selector.
+        c.view.setOnLongClickListener { CallVolume.toggle(activity); true }
         // Mirror the ACTUALLY applied route (auto-default to BT, hotplug, cycling) onto our icon.
         CallAudio.setRouteListener { route ->
             outIcon?.setImageDrawable(MaterialSymbol(routeIcon(route), M3.onSurface))
