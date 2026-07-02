@@ -170,14 +170,16 @@ suspend fun buildMessageActions(
     if (msg != null && (caps.fwdText != null || caps.forwardable)) add("forward", "转发", MaterialSymbols.forward) {
         if (caps.forwardable) host.forwardMsgRecord(msg, msgItem) else if (caps.fwdText != null) host.forwardText(caps.fwdText)
     }
-    // 编辑图片 — edit any image (own/others', incl. the forward/multi-image viewer via pressedEl), then
-    // offer 保存 / 系统分享 / 转发 / 取消 for the edited result.
+    // 编辑图片 — edit any image (chat pic own/others', forward/multi-image viewer via pressedEl, or a
+    // 商城表情), then offer 保存 / 系统分享 / 转发 / 取消 for the edited result. (An animated market face is
+    // edited as its first frame — the editor produces a static image.)
     val editPic = caps.picEl
-    if (editPic != null && fm != null) add("edit_image", "编辑图片", MaterialSymbols.brush) {
+    val editMf = caps.mfFile
+    if ((editPic != null || editMf != null) && fm != null) add("edit_image", "编辑图片", MaterialSymbols.brush) {
         // Capture the nav fragment NOW (host is attached); after the editor returns the host View may
         // be detached, so resolving it then gives "no nav fragment" and the forward silently no-ops.
         val nav = WatchPicElementExtKt.W(host)?.let { WatchPicElementExtKt.Y(it) }
-        withPicFile(host, editPic) { file ->
+        val openEditor: (java.io.File) -> Unit = { file ->
             ImageEditor.open(fm, file) { edited ->
                 momoi.mod.qqpro.hook.imageeditor.ImageResultDialog(edited, onForward = {
                     forwardElementsVia(nav, "转发") {
@@ -186,6 +188,8 @@ suspend fun buildMessageActions(
                 }).show(fm, "qqpro_image_result")
             }
         }
+        // Chat pics need an async file resolve; a market face's rendered file is ready.
+        if (editPic != null) withPicFile(host, editPic) { openEditor(it) } else openEditor(editMf!!)
     }
     // 复读 (resend whole message; not ark/file/combined; live only)
     if (!isHistory && msg != null && (caps.forwardable || caps.fwdText != null) && !caps.isArk)
