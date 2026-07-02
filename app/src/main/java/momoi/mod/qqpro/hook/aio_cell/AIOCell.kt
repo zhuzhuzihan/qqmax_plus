@@ -406,6 +406,8 @@ object AIOCell {
                         tv.setCompoundDrawablesRelative(icon, null, null, null)
                         tv.compoundDrawablePadding = (size * 0.28f).toInt()
                     }
+                    // Gate the native redial-on-tap behind a confirmation (avoid accidental calls).
+                    CallRecordConfirm.gate(tv, item.r)
                 }
             }
             // Apply the user's message text color / size override to ALL message text, not just
