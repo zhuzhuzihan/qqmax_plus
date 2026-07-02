@@ -171,7 +171,7 @@ suspend fun buildMessageActions(
         if (caps.forwardable) host.forwardMsgRecord(msg, msgItem) else if (caps.fwdText != null) host.forwardText(caps.fwdText)
     }
     // 编辑图片 — edit any image (own/others', incl. the forward/multi-image viewer via pressedEl), then
-    // open the forward selector to choose where to send the result.
+    // offer 保存 / 系统分享 / 转发 / 取消 for the edited result.
     val editPic = caps.picEl
     if (editPic != null && fm != null) add("edit_image", "编辑图片", MaterialSymbols.brush) {
         // Capture the nav fragment NOW (host is attached); after the editor returns the host View may
@@ -179,9 +179,11 @@ suspend fun buildMessageActions(
         val nav = WatchPicElementExtKt.W(host)?.let { WatchPicElementExtKt.Y(it) }
         withPicFile(host, editPic) { file ->
             ImageEditor.open(fm, file) { edited ->
-                forwardElementsVia(nav, "转发") {
-                    arrayListOf(com.tencent.watch.aio_impl.ext.MsgUtil().a(edited.path, 0))
-                }
+                momoi.mod.qqpro.hook.imageeditor.ImageResultDialog(edited, onForward = {
+                    forwardElementsVia(nav, "转发") {
+                        arrayListOf(com.tencent.watch.aio_impl.ext.MsgUtil().a(edited.path, 0))
+                    }
+                }).show(fm, "qqpro_image_result")
             }
         }
     }

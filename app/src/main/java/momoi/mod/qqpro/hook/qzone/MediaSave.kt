@@ -37,17 +37,17 @@ object MediaSave {
         }
     }.getOrDefault("jpg" to "image/jpeg")
 
-    fun toGallery(ctx: Context, src: File, displayName: String, mime: String, isVideo: Boolean): Boolean {
+    fun toGallery(ctx: Context, src: File, displayName: String, mime: String, isVideo: Boolean, subDir: String = "QZone"): Boolean {
         if (!src.exists() || src.length() == 0L) return false
         return runCatching {
-            if (Build.VERSION.SDK_INT >= 29) saveModern(ctx, src, displayName, mime, isVideo)
-            else saveLegacy(ctx, src, displayName)
+            if (Build.VERSION.SDK_INT >= 29) saveModern(ctx, src, displayName, mime, isVideo, subDir)
+            else saveLegacy(ctx, src, displayName, subDir)
         }.onFailure { Utils.log("MediaSave.toGallery: $it") }.getOrDefault(false)
     }
 
-    private fun saveModern(ctx: Context, src: File, name: String, mime: String, isVideo: Boolean): Boolean {
+    private fun saveModern(ctx: Context, src: File, name: String, mime: String, isVideo: Boolean, subDir: String): Boolean {
         val resolver = ctx.contentResolver
-        val dir = (if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES) + "/QZone"
+        val dir = (if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_PICTURES) + "/" + subDir
         val collection = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val values = ContentValues().apply {
@@ -65,9 +65,9 @@ object MediaSave {
     }
 
     @Suppress("DEPRECATION")
-    private fun saveLegacy(ctx: Context, src: File, name: String): Boolean {
+    private fun saveLegacy(ctx: Context, src: File, name: String, subDir: String): Boolean {
         val pics = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-        val dir = File(pics, "QZone").apply { mkdirs() }
+        val dir = File(pics, subDir).apply { mkdirs() }
         val dst = File(dir, name)
         src.inputStream().use { i -> dst.outputStream().use { o -> i.copyTo(o) } }
         MediaScannerConnection.scanFile(ctx, arrayOf(dst.absolutePath), null, null)
