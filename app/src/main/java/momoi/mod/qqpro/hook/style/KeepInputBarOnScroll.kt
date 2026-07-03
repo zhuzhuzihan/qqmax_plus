@@ -5,6 +5,7 @@ import com.tencent.watch.aio_impl.coreImpl.intent.AIOMsgListMviIntent
 import com.tencent.watch.aio_impl.coreImpl.vb.`WatchAIOListVB$onCreateView$7`
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.hook.action.CurrentMsgList
 import momoi.mod.qqpro.util.Utils
 
 /**
@@ -23,6 +24,20 @@ import momoi.mod.qqpro.util.Utils
  */
 @Mixin
 class KeepInputBarOnScroll : `WatchAIOListVB$onCreateView$7`() {
+    // Gate the float-pop until the chat's initial open-scroll has settled. When a chat opens at an unread
+    // position the framework fires a PROGRAMMATIC scroll-to-unread; popping the float during it reparents
+    // the input bar into an overlay that lays out before its view tree is ready and ends up detached &
+    // invisible (the "input bar disappeared on open" bug). IDLE means that open-scroll finished; DRAGGING
+    // means a genuine user touch — either way it's safe to float. SETTLING is deliberately NOT counted, so
+    // the programmatic open-scroll (itself a SETTLING) can't re-enable popping mid-flight.
+    override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+        super.onScrollStateChanged(recyclerView, newState)
+        if (!Settings.keepInputBarOnScroll.value) return
+        if (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+            CurrentMsgList.scrollSettledSinceOpen = true
+        }
+    }
+
     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
         if (!Settings.keepInputBarOnScroll.value) {
             super.onScrolled(recyclerView, dx, dy)
@@ -43,7 +58,9 @@ class KeepInputBarOnScroll : `WatchAIOListVB$onCreateView$7`() {
             // the chat. Guarded so it animates in once and then stays floating while scrolling.
             // 全员禁言: don't pop the floating input bar for a muted non-admin — it would surface the
             // EditText that the footer hint hides. Leave the native collapse-to-arrow behavior instead.
-            if (scrolledUp && ctrl.g != 2 && !isWholeMutedForSelf()) {
+            // scrollSettledSinceOpen: never float during the initial programmatic open-scroll — the
+            // overlay would detach and the input bar vanishes (see onScrollStateChanged).
+            if (scrolledUp && ctrl.g != 2 && CurrentMsgList.scrollSettledSinceOpen && !isWholeMutedForSelf()) {
                 ctrl.m.onClick(recyclerView)
                 Utils.log("KeepInputBarOnScroll: float popped (state=${ctrl.g})")
             }

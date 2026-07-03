@@ -3,6 +3,7 @@ package momoi.mod.qqpro.hook.action
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.AIOLayoutManager
 import com.tencent.aio.api.factory.IAIOFactory
 import com.tencent.aio.api.list.IDataSubmitApi
 import com.tencent.aio.api.list.IListUIOperationApi
@@ -142,6 +143,55 @@ object CurrentMsgList {
         }, timeoutMs)
         isLoadingMsg = false // clear any stuck guard from a previously interrupted load
         loadMoreMsg()
+    }
+
+    // ── Tall-screen bottom alignment ────────────────────────────────────────────────────────────────
+    // When a chat opens, WatchAIOListVB.onCreateView calls arrangeCellMode(1), which sets the chat layout
+    // manager's needTopToBottom flag (AIOLayoutManager field `u`) to true. With that flag on,
+    // AIOLayoutManager.c() offsets every cell UP to top-align content shorter than the viewport — a look
+    // tuned for the small watch screen. On a TALL device those few cells then leave empty space BELOW the
+    // newest message (the "bottom gap"). The list is already stackFromEnd=true, so with needTopToBottom
+    // OFF the base layout naturally pins the newest message to the bottom and any slack sits at the top
+    // (the normal chat look). So the fix is to force needTopToBottom=false — NOT to load more messages.
+    // Paging in older history can't help: c() re-top-aligns on every layout pass, so the gap returns each
+    // frame regardless of how much content is loaded (that was the earlier auto-fill attempt's flaw).
+    // arrangeCellMode(1) runs once per view creation, so re-asserting the flag on each render is stable.
+
+    // Has the chat's initial open-scroll settled (or the user actively dragged) since this chat opened?
+    // Reset per chat open in [Clear]. Read by KeepInputBarOnScroll: the input-bar float must NOT be popped
+    // during the initial programmatic scroll-to-unread — the overlay lays out before the bar's view tree is
+    // ready and ends up detached/invisible (the "input bar disappeared" bug when opening a chat with
+    // unread messages). Only float once the list has settled to IDLE or the user drags. See
+    // KeepInputBarOnScroll.
+    @JvmField
+    var scrollSettledSinceOpen = false
+
+    /**
+     * Force the chat list to bottom-align (newest message pinned to the viewport bottom) by clearing the
+     * layout manager's needTopToBottom flag. See the note above. Called from [Hook.n] BEFORE the native
+     * render so the ensuing layout pass already sees the flag cleared. No-op once the flag is already off
+     * and when content overflows the viewport (the top-pull is a no-op there anyway).
+     */
+    private fun forceBottomAlign() {
+        runCatching {
+            val lm = vb.H.layoutManager ?: return
+            if (lm !is AIOLayoutManager) return
+            // Runtime field `u` (jadx: needTopToBottom) is declared on AIOLayoutManager. Written
+            // reflectively — the compile-time stub doesn't declare it and there is no stable setter.
+            var c: Class<*>? = lm.javaClass
+            while (c != null) {
+                val f = runCatching { c.getDeclaredField("u") }.getOrNull()
+                if (f != null && f.type == java.lang.Boolean.TYPE) {
+                    f.isAccessible = true
+                    if (f.getBoolean(lm)) {
+                        f.setBoolean(lm, false)
+                        Utils.log("MsgList: needTopToBottom -> false (tall-screen bottom-align)")
+                    }
+                    return
+                }
+                c = c.superclass
+            }
+        }
     }
 
     /**
@@ -313,6 +363,9 @@ object CurrentMsgList {
             // Notify pre-page waiters only for older-history results (bit 0x4), after msgList is
             // updated so they observe the new size.
             if (updateType and 4 != 0) topPageResult.update(updateType)
+            // Tall-screen: pin the newest message to the bottom (see forceBottomAlign). Set before the
+            // native render so the layout pass it triggers already sees needTopToBottom=false.
+            forceBottomAlign()
             super.n(list as MsgListUiState, uiHelper)
         }
     }
@@ -367,6 +420,7 @@ object CurrentMsgList {
         ): View {
             Utils.log("MsgList.Clear: resetting msgList mirror (isPreload=$isPreload)")
             msgList = Observable(ArrayList())
+            scrollSettledSinceOpen = false
             return super.a(fragment, inflater, container, isPreload)
         }
     }
