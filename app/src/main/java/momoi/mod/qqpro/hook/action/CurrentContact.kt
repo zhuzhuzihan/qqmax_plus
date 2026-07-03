@@ -47,7 +47,13 @@ object CurrentMemberInfo {
             arrayListOf(uid),
             false
         ) { _, _, result ->
-            val info = result.infos.values.firstOrNull() ?: run {
+            // infos is a HashMap<uid, MemberInfo>. Look up the EXACT uid we asked for — never
+            // .values.firstOrNull(): the kernel can return a batch (or, for an uncached uid, an
+            // arbitrary cached member), and firstOrNull() then hands back the SAME wrong member for
+            // many different uids → every cell shows one identical (wrong) name, cached under the
+            // wrong uid so it survives scrolling. The avatar path (bindAvatar, keyed on senderUid)
+            // is unaffected, which is why only the name was wrong.
+            val info = result.infos[uid] ?: run {
                 map[uid]?.let(callback)
                 return@getMemberInfoForMqq
             }
