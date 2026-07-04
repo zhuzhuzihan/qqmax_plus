@@ -146,6 +146,12 @@ object RichProfilePage {
                 card.addView(it)
             }
 
+            // Online presence line (friend or group member), gated by the profile status setting.
+            momoi.mod.qqpro.hook.action.profileOnlineStatusView(ctx, uid)?.let {
+                (it.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 4.dp
+                card.addView(it)
+            }
+
             // Extended-info rows (filled async). Hidden until data arrives.
             val rows = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL

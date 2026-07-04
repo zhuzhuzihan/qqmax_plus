@@ -163,6 +163,9 @@ object RichTitlebar {
                         countTv.post { countTv.text = " (${members.size})"; relayoutTitle() }
                     }
                 }.onFailure { Utils.log("RichTitlebar member fetch failed: $it") }
+            } else if (Settings.onlineStatusTitlebar.value && peerId.isNotEmpty()) {
+                // DM: show the peer's presence (e.g. "手机在线") in the otherwise-empty count slot.
+                applyDmOnlineStatus(countTv, peerId)
             }
 
             val bar = FrameLayout(ctx)
@@ -385,6 +388,40 @@ object RichTitlebar {
      * once the badge would crowd it, the block stays just to the right of the badge (and the name
      * ellipsizes if even that won't fit). Width is the fixed row width: screen − 2·corner margin.
      */
+    /**
+     * DM titlebar presence: render the peer's status (e.g. "手机在线") in the count slot, coloured by
+     * online state and sized down. Starts polling, primes this peer, and observes for live updates;
+     * the observer detaches with the count view so it doesn't leak across chats.
+     */
+    private fun applyDmOnlineStatus(countTv: TextView, peerId: String) {
+        momoi.mod.qqpro.hook.action.OnlineStatus.start()
+        momoi.mod.qqpro.hook.action.OnlineStatus.prime(listOf(peerId))
+        countTv.textSize = 10f
+        val update = {
+            val desc = momoi.mod.qqpro.hook.action.OnlineStatus.describe(peerId)
+            if (desc != null) {
+                countTv.setTextColor(
+                    momoi.mod.qqpro.hook.action.OnlineStatusUi.color(
+                        momoi.mod.qqpro.hook.action.OnlineStatus.isOnline(peerId)
+                    )
+                )
+                countTv.text = "  $desc"
+            } else {
+                countTv.text = ""
+            }
+            relayoutTitle()
+        }
+        update()
+        val observer: () -> Unit = { countTv.post { update() }; Unit }
+        momoi.mod.qqpro.hook.action.OnlineStatus.addObserver(observer)
+        countTv.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) {
+                momoi.mod.qqpro.hook.action.OnlineStatus.removeObserver(observer)
+            }
+        })
+    }
+
     private fun relayoutTitle() {
         val name = nameView ?: return
         val count = countView ?: return

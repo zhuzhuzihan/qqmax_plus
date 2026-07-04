@@ -43,6 +43,8 @@ class ChatListMaterial : ChatListFragment() {
             root.setBackgroundColor(M3.surface)
             Utils.log("ChatListMaterial: list background materialized")
         }
+        // Keep DM presence dots fresh as status pushes arrive (gated inside).
+        wireRecentOnlineRefresh(root)
         return root
     }
 }
@@ -182,6 +184,7 @@ object RecentContacts {
             super.t(item, holder)
             swapPinIcon(holder)
             materializeChatRow(holder)
+            applyRecentOnlineBadge(holder, item)
         }
 
         /**

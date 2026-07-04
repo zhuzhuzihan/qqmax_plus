@@ -462,6 +462,12 @@ class 设置页 : SettingsActivity() {
             switch("多图折叠为两张", "重做空间里多图说说只显示两张方图，第二张变暗显示「+N」；关闭则按三列方图网格显示全部", Settings.qzoneTruncateImages)
             switch("资料页姓名多行可复制", "好友/群资料设置页及成员资料卡的名称过长时换行显示，长按名称可复制；设置页内QQ号与昵称分两行、可分别长按复制(重进资料页生效)", Settings.profileNameMultiline)
         },
+        SettingsCategory("在线状态", "显示好友/群成员的在线状态") {
+            switch("消息列表在线圆点", "会话列表中，单聊(好友)会话的头像左上角显示彩色在线圆点(在线绿色/离线灰色)", Settings.onlineStatusMainList)
+            switch("联系人列表在线描述", "好友列表中，在每个好友名字后附上在线状态描述(如「手机在线」)", Settings.onlineStatusContactList)
+            switch("聊天标题栏在线状态", "单聊(好友)聊天页的富标题栏中，名字旁显示对方在线状态(需开启标题栏)", Settings.onlineStatusTitlebar)
+            switch("资料卡在线状态", "好友/群成员资料卡中显示在线状态描述", Settings.onlineStatusProfile)
+        },
         SettingsCategory("相机与媒体", "拍照、相册与音频") {
             switch("使用应用内相机", "开启后拍照/录像都用应用内相机，关闭后改用系统/第三方相机", Settings.useInAppCamera)
             switch("相册按拍摄时间排序", "图片选择器按拍摄时间排序，关闭则按文件修改时间(默认)", Settings.gallerySortByDateTaken)

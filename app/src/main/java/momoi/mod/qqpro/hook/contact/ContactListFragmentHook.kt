@@ -70,6 +70,12 @@ class ContactListFragmentHook : ContactListFragment() {
 
     override fun Y(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         val v = super.Y(inflater, container, savedInstanceState)
+        // Append the full online-status description to friend rows (independent of contactSections).
+        if (Settings.onlineStatusContactList.value && v is RecyclerView) {
+            runCatching {
+                momoi.mod.qqpro.hook.action.ContactOnlineStatusStyler(v, field("i")!!).install()
+            }.onFailure { Utils.log("ContactListFragmentHook status styler: $it") }
+        }
         if (Settings.contactSections.value && v is RecyclerView) {
             runCatching { v.addOnChildAttachStateChangeListener(HeaderStyler(v, field("i")!!)) }
                 .onFailure { Utils.log("ContactListFragmentHook Y: $it") }

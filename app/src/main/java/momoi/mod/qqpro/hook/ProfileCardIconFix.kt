@@ -178,12 +178,27 @@ class ProfileCardIconFix : ProfileCardFragment() {
             if (nickView != null && !uid.isNullOrEmpty()) {
                 val color = qqView?.currentTextColor ?: M3.onSurface
                 tryShowRealNick(nickView, uid, displayName, ctx, color)
+                insertStatusLine(nickView, uid, ctx)
             } else {
                 Utils.log("ProfileCardIconFix: skip real-nick (nickView=$nickView uid='$uid')")
             }
         } catch (e: Exception) {
             Utils.log("ProfileCardIconFix enrich error: ${e.message}")
         }
+    }
+
+    /** Insert the online-presence line under the nick (legacy, non-Material profile). Idempotent. */
+    private fun insertStatusLine(nickView: View, uid: String, ctx: Context) {
+        val statusTv = momoi.mod.qqpro.hook.action.profileOnlineStatusView(ctx, uid) ?: return
+        val wrapper = nickView.parent as? View ?: return
+        val column = wrapper.parent as? LinearLayout ?: return
+        if (column.findViewWithTag<View>(STATUS_TAG) != null) return
+        statusTv.tag = STATUS_TAG
+        (statusTv.layoutParams as? LinearLayout.LayoutParams
+            ?: LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            )).also { it.gravity = Gravity.CENTER_HORIZONTAL; statusTv.layoutParams = it }
+        column.addView(statusTv, column.indexOfChild(wrapper) + 1)
     }
 
     /** Insert the real-nickname line if it's available, differs from the shown name, and isn't shown yet. */
@@ -224,5 +239,6 @@ class ProfileCardIconFix : ProfileCardFragment() {
 
     companion object {
         private const val REAL_NICK_TAG = "qqpro_real_nick"
+        private const val STATUS_TAG = "qqpro_online_status"
     }
 }

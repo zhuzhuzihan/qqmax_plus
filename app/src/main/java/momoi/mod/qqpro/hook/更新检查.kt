@@ -30,6 +30,9 @@ class 更新检查 : MainActivity() {
         }
         super.onCreate(savedInstanceState)
         Watchdog.install(this)
+        // Start online-presence polling once at launch if any status surface is enabled (the kernel
+        // won't push presence otherwise). Cheap no-op when all status toggles are off. See OnlineStatus.
+        if (Settings.anyOnlineStatus) momoi.mod.qqpro.hook.action.OnlineStatus.start()
         // The base QQ APK never requests Android 13+ POST_NOTIFICATIONS, so notifications are dropped
         // until granted. Ask on launch (no-op below API 33 / once already granted).
         NotificationPermission.ensure(this)

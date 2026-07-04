@@ -121,6 +121,12 @@ object Settings {
     // Show a 全员禁言 (whole-group mute) switch in the M3 group settings, for the owner/admin only.
     // Syncs to the current mute state and toggles it via the kernel. Requires useM3Settings. Default on.
     val groupWholeMute = BooleanPref("groupWholeMute", true)
+    // Online-presence display (friends + group members). Presence needs kernel status polling, so it
+    // only starts when at least one of these is on. Default on. See OnlineStatus.kt.
+    val onlineStatusMainList = BooleanPref("onlineStatusMainList", true)   // DM avatar dot in conversation list
+    val onlineStatusContactList = BooleanPref("onlineStatusContactList", true) // status text in friend list
+    val onlineStatusTitlebar = BooleanPref("onlineStatusTitlebar", true)  // status line in DM chat titlebar
+    val onlineStatusProfile = BooleanPref("onlineStatusProfile", true)    // status line on profile card (friend + group member)
     val backToFirstPage = BooleanPref("backToFirstPage", true)
     // When tapping a reply to jump to its source message, drop the page-load cap (normally ~1000
     // pages) and keep paging up until the source is found or the top of history is reached. Lets
@@ -499,6 +505,11 @@ object Settings {
         }
     } ?: ""
 
+    // True when any online-presence surface is enabled — gates whether kernel status polling starts.
+    val anyOnlineStatus: Boolean
+        get() = onlineStatusMainList.value || onlineStatusContactList.value ||
+            onlineStatusTitlebar.value || onlineStatusProfile.value
+
     // Every setting exposed on the settings page, in display order. Used by SettingsBackup to
     // export/import only these custom settings (not unrelated keys like drafts or the chat-bg path).
     // Declared last so all the Pref properties above are already initialised.
@@ -510,7 +521,9 @@ object Settings {
         showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, plusOneButton, replaceGroupNick, showMemberLevel, inlineSendButton,
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
-        hideVoiceButton, muteHideInputBar, groupWholeMute, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
+        hideVoiceButton, muteHideInputBar, groupWholeMute,
+        onlineStatusMainList, onlineStatusContactList, onlineStatusTitlebar, onlineStatusProfile,
+        backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, hideTitlebarWhenTyping, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, editSingleImageBeforeSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,
