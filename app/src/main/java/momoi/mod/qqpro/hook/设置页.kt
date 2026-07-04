@@ -281,7 +281,8 @@ class 设置页 : SettingsActivity() {
                 current = { if (Settings.lightMode.value) 1 else 0 }) { which ->
                 Settings.lightMode.value = which == 1
             }
-            colorPicker("主题色 Primary", "主强调色：按钮/开关/链接/高亮", Settings.themeColor, MaterialColors.ACCENT, { M3.primary }, note)
+            switch("跟随系统主题色", "在支持 Material You 动态取色的设备(Android 12 / API 31 及以上)上，未单独设置的颜色自动取用系统壁纸配色(按明暗基调映射)；单独设置的颜色仍优先。旧系统(多数手表)无动态取色则用内置配色。$note", Settings.followSystemTheme)
+            colorPicker("主题色 Primary", "主强调色：按钮/开关/链接/高亮；跟随系统时留空自动取系统色", Settings.themeColor, MaterialColors.ACCENT, { M3.primary }, note)
             colorPicker("主色前景 On Primary", "强调色上的文字/图标，留空自动", Settings.themeOnPrimary, MaterialColors.ON, { M3.onPrimary }, note)
             colorPicker("主色容器 Primary Container", "次级强调表面，留空由主题色生成", Settings.themePrimaryContainer, MaterialColors.ACCENT, { M3.primaryContainer }, note)
             colorPicker("容器前景 On Primary Container", "主色容器上的文字，留空自动", Settings.themeOnPrimaryContainer, MaterialColors.ACCENT, { M3.onPrimaryContainer }, note)

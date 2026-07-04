@@ -49,6 +49,12 @@ object Settings {
     // by the M3 object: it picks each token's default by this flag, while per-token 外观主题 overrides
     // still win. Chosen via the 外观模式 selector; rethemes materialized screens the next time built.
     val lightMode = BooleanPref("lightMode", false)
+    // Follow the system Material You dynamic color palette (Android 12+ / API 31+) when the device
+    // exposes it. On (default): each M3 token with no explicit 外观主题 override is seeded from the
+    // system's wallpaper-derived accent/neutral tones instead of the built-in default, mode-aware
+    // (light/dark). A per-token color override still wins. On devices without dynamic color (older
+    // OS — e.g. most watches) this is a no-op and the built-in defaults are used. Read live by M3.
+    val followSystemTheme = BooleanPref("followSystemTheme", true)
     // All theme-token prefs together (for "restore defaults" — clears every custom M3 color).
     val themeTokens: List<StringPref> get() = listOf(
         themeColor, themeOnPrimary, themePrimaryContainer, themeOnPrimaryContainer,
@@ -520,7 +526,7 @@ object Settings {
         scale, chatScale, enableSmoothScroll, encoderScrollSpeed, blockBack, disableSwipeBack, swapCenterKeyboard,
         themeColor, themeOnPrimary, themePrimaryContainer, themeOnPrimaryContainer,
         themeSurface, themeSurfaceContainer, themeSurfaceContainerHigh, themeSurfaceVariant,
-        themeOnSurface, themeOnSurfaceVariant, themeOnSurfaceTip, themeHint, themeOutline, themeOutlineVariant, themeError, lightMode,
+        themeOnSurface, themeOnSurfaceVariant, themeOnSurfaceTip, themeHint, themeOutline, themeOutlineVariant, themeError, lightMode, followSystemTheme,
         showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, plusOneButton, replaceGroupNick, showMemberLevel, inlineSendButton,
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
