@@ -55,8 +55,14 @@ fun applyShowStatusBar(act: Activity) {
         }
         val content = act.findViewById<View>(android.R.id.content) ?: return
         content.setOnApplyWindowInsetsListener { v, insets ->
-            val top = insets.getInsets(WindowInsets.Type.statusBars()).top
-            if (v.paddingTop != top) v.setPadding(v.paddingLeft, top, v.paddingRight, v.paddingBottom)
+            // Inset content clear of BOTH bars — status bar (top) and navigation bar (bottom), plus any
+            // side/cutout insets — so nothing is drawn behind the system UI on Android 15+ edge-to-edge.
+            val bars = insets.getInsets(WindowInsets.Type.systemBars())
+            if (v.paddingLeft != bars.left || v.paddingTop != bars.top ||
+                v.paddingRight != bars.right || v.paddingBottom != bars.bottom
+            ) {
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            }
             insets
         }
         content.requestApplyInsets()
