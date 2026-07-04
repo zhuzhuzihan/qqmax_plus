@@ -97,9 +97,14 @@ object LoginM3 {
             val dm = ctx.resources.displayMetrics
             val side = (minOf(dm.widthPixels, dm.heightPixels) * 0.62f).toInt().coerceAtLeast(120.dp)
             val card = FrameLayout(ctx).apply {
-                background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = M3.radiusLg }
+                // Themed frame (follows the M3 / system palette); the QR sits on its own white chip
+                // below so it keeps the light quiet-zone a scanner needs regardless of theme.
+                background = GradientDrawable().apply { setColor(M3.surfaceContainerHigh); cornerRadius = M3.radiusLg }
                 val p = 8.dp; setPadding(p, p, p, p)
             }
+            // White chip directly behind the live QR — guarantees scannability on any theme. The QR
+            // module color itself follows the theme via the QrCodeThemeColor @Mixin on b().
+            qr.background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = M3.radiusMd }
             card.addView(qr, FrameLayout.LayoutParams(side, side, Gravity.CENTER))
             runCatching { LoginQrZoomHelper.attachTapZoom(qr) }
 
@@ -114,7 +119,11 @@ object LoginM3 {
             // Refresh overlay (covers the card; shown on expiry/failure).
             val overlay = FrameLayout(ctx).apply {
                 visibility = View.GONE
-                background = GradientDrawable().apply { setColor(0xE6_FFFFFF.toInt()); cornerRadius = M3.radiusLg }
+                // Same corner radius as the QR chip below (radiusMd) so the timeout scrim's rounded
+                // corners line up with the QR instead of showing a larger radius.
+                background = GradientDrawable().apply {
+                    setColor((M3.surfaceContainerHigh and 0x00FFFFFF) or 0xE6_000000.toInt()); cornerRadius = M3.radiusMd
+                }
                 isClickable = true
             }
             overlay.addView(M3Button(ctx).apply {
@@ -211,7 +220,7 @@ object LoginM3 {
             // placeholder and re-downloaded, causing a periodic gray flicker over the avatar.
             if (uin != loadedAvatarUin) {
                 loadedAvatarUin = uin
-                av.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(M3.surfaceContainerHigh) }
+                av.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(M3.surfaceContainer) }
                 av.setImageDrawable(null)
                 av.runCatching { loadPicUrl(avatarUrl(uin)) }
             }
