@@ -13,8 +13,16 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.tencent.qqnt.kernel.nativeinterface.MemberRole
 import com.tencent.widget.SingleLineTextView
+import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.forEachAll
+import momoi.mod.qqpro.hook.GroupMute
+import momoi.mod.qqpro.hook.action.CurrentContact
+import momoi.mod.qqpro.hook.action.CurrentGroupMembers
+import momoi.mod.qqpro.hook.action.SelfContact
+import momoi.mod.qqpro.hook.action.isGroup
+import momoi.mod.qqpro.hook.view.ConfirmFragment
 import momoi.mod.qqpro.keepEmojiFitToText
 import momoi.mod.qqpro.lib.FILL
 import momoi.mod.qqpro.lib.WRAP
@@ -257,6 +265,79 @@ private fun buildList(ctx: Context, rows: List<HarvestedRow>, afterClick: (() ->
     return card
 }
 
+private const val MUTE_ROW_TAG = "qqpro_group_mute_row"
+
+/**
+ * Append a 全员禁言 (whole-group mute) switch to the group-settings [card] — visible ONLY to the group
+ * owner/admin (role resolved async, so the row appears a beat after the list). The switch syncs to the
+ * current mute state ([GroupMute.isMuted]); enabling asks for confirmation first (it silences the whole
+ * group), disabling is immediate; on server reject the switch reverts. See [GroupMute].
+ */
+private fun appendGroupMuteToggle(ctx: Context, card: M3Card) {
+    if (!Settings.groupWholeMute.value || !CurrentContact.isGroup) return
+    val peerUid = CurrentContact.peerUid
+    if (peerUid.isEmpty()) return
+    CurrentGroupMembers.get(SelfContact.peerUid) { self ->
+        val privileged = self.role == MemberRole.OWNER || self.role == MemberRole.ADMIN
+        if (!privileged) { Utils.log("GroupMute: self not owner/admin (role=${self.role}), no toggle"); return@get }
+        card.post {
+            runCatching { buildAndAppendMuteRow(ctx, card, peerUid) }
+                .onFailure { Utils.log("GroupMute: append row failed: $it") }
+        }
+    }
+}
+
+private fun buildAndAppendMuteRow(ctx: Context, card: M3Card, peerUid: String) {
+    // The async role callback can fire more than once (member list re-delivery) — never double-append.
+    if (card.findViewWithTag<View>(MUTE_ROW_TAG) != null) return
+
+    val item = M3ListItem(ctx).dense().title("全员禁言").subtitle("开启后仅群主和管理员可发言")
+    item.tag = MUTE_ROW_TAG
+    val fg = M3.error
+    val disc = ImageView(ctx).apply {
+        setImageDrawable(MaterialSymbol.circled(MaterialSymbols.mic_off, fg, withAlpha(M3.error, 0x33)))
+    }
+    item.leading(disc, 30)
+
+    val sw = M3Switch(ctx)
+    sw.setChecked(GroupMute.isMuted(peerUid), notify = false)
+    item.trailing(sw)
+
+    fun fire(target: Boolean) {
+        GroupMute.setMuted(peerUid, target) { ok ->
+            if (ok) {
+                Utils.toast(Utils.application, if (target) "已开启全员禁言" else "已关闭全员禁言")
+            } else {
+                sw.setChecked(!target, notify = false) // revert to the real state on server reject
+                Utils.toast(Utils.application, "操作失败")
+            }
+        }
+    }
+
+    sw.onChange = { want ->
+        if (want) {
+            // Enabling silences everyone — undo the visual flip, confirm first, then commit + fire.
+            // (The brief revert is hidden behind the confirm dialog; a cancel/swipe leaves it off.)
+            sw.setChecked(false, notify = false)
+            val fm = (ctx.findActivity() as? androidx.fragment.app.FragmentActivity)?.supportFragmentManager
+            if (fm != null) {
+                ConfirmFragment(title = "确定开启全员禁言？", confirmLabel = "开启") {
+                    sw.setChecked(true, notify = false); fire(true)
+                }.show(fm, "qqpro_group_mute_confirm")
+            } else {
+                sw.setChecked(true, notify = false); fire(true)
+            }
+        } else {
+            fire(false) // un-mute is harmless — no confirm
+        }
+    }
+    item.setOnClickListener { sw.toggle() }
+
+    if (card.childCount > 0) card.addView(divider(ctx))
+    card.addView(item, LinearLayout.LayoutParams(FILL, WRAP))
+    Utils.log("GroupMute: 全员禁言 toggle appended (muted=${GroupMute.isMuted(peerUid)})")
+}
+
 /**
  * Mirror late additions to the native [container] into [card]. QQPro feature hooks (群公告 /
  * 搜索聊天记录 …) inject their cards into the native settings container in onViewCreated — AFTER our Y
@@ -412,6 +493,7 @@ fun rebuildSettingList(
     swipeBack: Boolean = false,
     dismissTarget: androidx.fragment.app.DialogFragment? = null,
     syntheticToggles: Boolean = false,
+    groupMute: Boolean = false,
 ): View? = runCatching {
     val ctx = nativeRoot.context
     val container = nativeRoot.byIdName(containerId) as? ViewGroup ?: return null
@@ -437,6 +519,7 @@ fun rebuildSettingList(
     val list = buildList(ctx, rows, afterClick)
     col.addView(list)
     attachLateInjections(container, ctx, list)
+    if (groupMute) appendGroupMuteToggle(ctx, list)
 
     Utils.log("M3SettingsRedesign: '$title' rebuilt (${rows.size} rows)")
     val content = frameOver(ctx, nativeRoot, scroll)

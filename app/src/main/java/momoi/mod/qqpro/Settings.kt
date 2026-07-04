@@ -118,6 +118,9 @@ object Settings {
     // When a group has 全员禁言 (whole-group mute) on and the current user is NOT owner/admin, hide
     // the bottom input bar and show a "全员禁言中" hint instead (you can't send anyway). Default on.
     val muteHideInputBar = BooleanPref("muteHideInputBar", true)
+    // Show a 全员禁言 (whole-group mute) switch in the M3 group settings, for the owner/admin only.
+    // Syncs to the current mute state and toggles it via the kernel. Requires useM3Settings. Default on.
+    val groupWholeMute = BooleanPref("groupWholeMute", true)
     val backToFirstPage = BooleanPref("backToFirstPage", true)
     // When tapping a reply to jump to its source message, drop the page-load cap (normally ~1000
     // pages) and keep paging up until the source is found or the top of history is reached. Lets
@@ -507,7 +510,7 @@ object Settings {
         showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, plusOneButton, replaceGroupNick, showMemberLevel, inlineSendButton,
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
-        hideVoiceButton, muteHideInputBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
+        hideVoiceButton, muteHideInputBar, groupWholeMute, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, hideTitlebarWhenTyping, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, editSingleImageBeforeSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,

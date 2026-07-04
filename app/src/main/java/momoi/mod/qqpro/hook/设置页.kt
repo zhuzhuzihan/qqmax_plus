@@ -343,6 +343,7 @@ class 设置页 : SettingsActivity() {
             switch("输入键居中", "在聊天页面将输入键居中放置", Settings.swapCenterKeyboard)
             switch("隐藏语音按钮", "在聊天页隐藏语音(麦克风)按钮，所有输入模式下均生效", Settings.hideVoiceButton)
             switch("全员禁言隐藏输入栏", "群全员禁言且自己非群主/管理员时，隐藏底部输入栏，改为显示“全员禁言中”提示", Settings.muteHideInputBar)
+            switch("群全员禁言开关", "在群聊设置中为群主/管理员显示「全员禁言」开关，可查看并切换当前禁言状态（需开启 Material 设置）", Settings.groupWholeMute)
             switch("图片随消息发送", "发送文字时一并发送已选图片", Settings.sendWithImage)
             switch("回复带艾特", "回复消息时自动艾特对方", Settings.replyWithAt)
             switch("气泡 +1 按钮", "最新一条与上一条内容相同时，在气泡上显示「+1」小按钮，点按可再次发送该内容；关闭则不显示", Settings.plusOneButton)

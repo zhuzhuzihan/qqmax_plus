@@ -353,7 +353,7 @@ class GroupSettingMargins : TroopSettingFragment() {
     override fun Y(p0: LayoutInflater, p1: ViewGroup?, p2: Bundle?): View {
         val root = super.Y(p0, p1, p2)!!
         if (Settings.useM3Settings.value) {
-            rebuildSettingList(root, "群聊设置", swipeBack = true)?.let { return it }
+            rebuildSettingList(root, "群聊设置", swipeBack = true, groupMute = true)?.let { return it }
         }
         (root as? ViewGroup)?.normalizeListCards()
         Utils.log("CardMarginUnify: group settings normalized")
