@@ -131,6 +131,7 @@ private fun iconPathForTitle(title: String): String? = with(MaterialSymbols) {
         title.contains("缓存") -> cleaning_services
         title.contains("清空") || title.contains("清除") || title.contains("聊天记录") -> delete_sweep
         title.contains("删除") -> delete
+        title.contains("移除") || title.contains("移出") -> person_remove
         title.contains("退出登录") || title.contains("注销") || title.contains("登出") -> logout
         title.contains("退出") || title.contains("解散") -> logout
         title.contains("切换") && title.contains("号") -> switch_account
