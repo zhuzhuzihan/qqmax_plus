@@ -38,6 +38,9 @@ class CallActivityHook : QQNTC2CWatchActivity() {
     }
 
     override fun onDestroy() {
+        // The call is gone — stop any active screen share so its mediaProjection foreground service
+        // (and its lingering notification) doesn't outlive the call.
+        ScreenShare.ensureStopped(this)
         if (Settings.callBluetoothRoute.value) CallAudio.release(this)
         super.onDestroy()
     }

@@ -42,7 +42,14 @@ class ScreenShareService : Service() {
         val data = intent.getParcelableExtra<Intent>(EXTRA_DATA)
         if (data == null) { stopSelf(); return START_NOT_STICKY }
 
-        startForeground(NOTI_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        // startForeground(id, notif, foregroundServiceType) is API 29+; the 3-arg overload doesn't
+        // exist on older devices (this watch is API 27) → NoSuchMethodError. Only pass the type on 29+.
+        val notification = buildNotification()
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            startForeground(NOTI_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(NOTI_ID, notification)
+        }
 
         runCatching { startCapture(code, data) }.onFailure {
             Utils.log("ScreenShareService: startCapture failed: $it")

@@ -57,8 +57,16 @@ object ScreenShare {
         }.onFailure { Utils.log("ScreenShare: start service failed: $it") }
     }
 
-    private fun stop(activity: Activity) {
-        runCatching { activity.stopService(Intent(activity, ScreenShareService::class.java)) }
+    private fun stop(activity: Activity) = ensureStopped(activity)
+
+    /**
+     * Stop the share service if it is running. Safe to call unconditionally — used both by the
+     * manual toggle and by the call activity's teardown, so a share left running when the call ends
+     * (peer hung up, or the user just left the call) doesn't orphan the foreground service/notification.
+     */
+    fun ensureStopped(context: Context) {
+        if (!sharing) return
+        runCatching { context.stopService(Intent(context, ScreenShareService::class.java)) }
             .onFailure { Utils.log("ScreenShare: stop service failed: $it") }
     }
 
