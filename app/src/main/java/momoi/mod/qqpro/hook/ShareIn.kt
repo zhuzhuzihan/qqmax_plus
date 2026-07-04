@@ -15,7 +15,6 @@ import com.tencent.watch.ime.util.ImeTextUtil
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.MsgUtil
 import momoi.mod.qqpro.util.Utils
-import momoi.mod.qqpro.util.runOnUi
 import mqq.app.MobileQQ
 import java.io.File
 import java.io.FileOutputStream
@@ -56,20 +55,64 @@ private class SharePayload(private val text: String?, private val items: List<Sh
     fun isEmpty() = items.isEmpty() && text.isNullOrBlank()
 }
 
-/** Holds the most recent captured payload until a resumed [MainFragment] consumes it. */
+/**
+ * Holds the most recent captured payload until a resumed host can open the picker for it.
+ *
+ * Reliability: a share can arrive before any host is ready — notably a COLD START, where the share
+ * launches the app and [MainFragment.onResume] fires before its nav tree is laid out, so the first
+ * open attempt fails. The old code opened once via `view.post` and gave up (payload lingered but was
+ * only ever re-tried on the *next* onResume, which often never comes → the picker silently never
+ * appears). And posting onto a detached/stale host view could leave the "opening" guard stuck true,
+ * killing every later attempt until a process restart.
+ *
+ * Now: a main-thread [handler] RETRIES [tryFire] every [RETRY_MS] until an ATTACHED host with a
+ * ready nav fragment accepts the payload (or [MAX_ATTEMPTS] is hit). The guard is reset synchronously
+ * in the same tick, so it can never get stuck. [arm] stages a new payload; [kick] re-pokes it when a
+ * host resumes. Idempotent: once the picker opens, [payload] is cleared and further ticks no-op.
+ */
 private object PendingShare {
-    @Volatile var payload: SharePayload? = null
-    val opening = AtomicBoolean(false)
+    private const val RETRY_MS = 200L
+    private const val MAX_ATTEMPTS = 25 // ~5s of retries for the nav host to become ready
 
-    /** Open the picker if we have both a payload and a resumed host view. */
-    fun fire() {
-        val view = ShareTrigger.activeView ?: return
-        val p = payload ?: return
-        if (!opening.compareAndSet(false, true)) return
-        view.post {
-            val ok = view.shareInToFriends(p)
-            if (ok) payload = null
-            opening.set(false)
+    @Volatile var payload: SharePayload? = null
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val firing = AtomicBoolean(false)
+    private var attempts = 0
+    private val tick = Runnable { tryFire() }
+
+    /** Stage a freshly-captured payload and start trying to open the picker. Any-thread safe. */
+    fun arm(p: SharePayload) {
+        payload = p
+        attempts = 0
+        handler.removeCallbacks(tick)
+        handler.post(tick)
+    }
+
+    /** Re-poke firing (e.g. a host just resumed). No-op if there's nothing staged. */
+    fun kick() {
+        if (payload == null) return
+        handler.removeCallbacks(tick)
+        handler.post(tick)
+    }
+
+    private fun tryFire() {
+        val p = payload ?: return // already consumed
+        val view = ShareTrigger.activeView?.takeIf { it.isAttachedToWindow }
+        if (view != null && firing.compareAndSet(false, true)) {
+            val ok = runCatching { view.shareInToFriends(p) }
+                .getOrElse { Utils.log("share-in: fire error: $it"); false }
+            firing.set(false)
+            if (ok) { payload = null; attempts = 0; return }
+        }
+        // No attached host / nav not ready yet / open failed → retry a bounded number of times.
+        if (payload != null) {
+            if (attempts++ < MAX_ATTEMPTS) {
+                handler.postDelayed(tick, RETRY_MS)
+            } else {
+                Utils.log("share-in: gave up opening picker after $attempts attempts (host=${ShareTrigger.activeView != null})")
+                payload = null
+                attempts = 0
+            }
         }
     }
 }
@@ -191,16 +234,13 @@ fun handleShareIntent(ctx: Context, intent: Intent?) {
         val payload = runCatching { stageIncoming(appCtx, intent) }
             .onFailure { Utils.log("share-in: stage failed: $it") }
             .getOrNull()
-        if (payload != null) {
-            PendingShare.payload = payload
-            runOnUi { PendingShare.fire() }
-        }
+        if (payload != null) PendingShare.arm(payload)
     }.start()
 }
 
 fun handleShareHostResume(view: View?) {
     ShareTrigger.activeView = view
-    PendingShare.fire()
+    PendingShare.kick()
 }
 
 /** Capture shares delivered to the launcher activity, stage them, then arm the picker trigger. */
