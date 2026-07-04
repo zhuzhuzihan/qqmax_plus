@@ -23,10 +23,12 @@ private const val STOP = "\\s\\u4e00-\\u9fa5\\u3002\\uff1f\\uff01\\uff0c\\u3001\
 private val strictPattern: Pattern =
     Pattern.compile("(?i)https?://[^$STOP]+")
 
-// Wide: also matches bare hosts like "example.com/path" with no scheme. Requires
-// at least one dot and a 2+ letter TLD so plain numbers/words don't match.
+// Wide: matches an explicit http(s):// URL greedily (same as strict — so IP/port hosts like
+// http://117.68.0.190:7880/gsxt/index.jspx match in full, not just a later ".jspx" substring),
+// OR a bare scheme-less host like "example.com/path" — the bare branch still requires at least one
+// dot and a 2+ letter TLD so plain numbers/words don't match.
 private val widePattern: Pattern = Pattern.compile(
-    "(?i)(?:https?://)?(?:[\\w-]+\\.)+[a-z]{2,}(?:[:/?#][^$STOP]*)?"
+    "(?i)(?:https?://[^$STOP]+|(?:[\\w-]+\\.)+[a-z]{2,}(?:[:/?#][^$STOP]*)?)"
 )
 
 fun currentUrlPattern(): Pattern =
