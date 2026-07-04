@@ -359,7 +359,12 @@ class 聊天底部按钮调整() : `InputBarController$inputContent$2`() {
                                         maxLines = 1
                                     }
                                 }
-                            editText.onImageUri = { uri -> sendImeImage(uri) }
+                            // Both keyboard-committed images (Gboard GIF/sticker/clipboard paste via
+                            // the IME) and clipboard paste-menu images splice into the box as an inline
+                            // "[图片]" token (composed with the rest of the message) rather than sending
+                            // immediately; each falls back to a direct send when no inline box is active.
+                            editText.onImageUri = { uri -> pasteImeImageAsToken(uri) }
+                            editText.onImagePaste = { uri -> pasteImeImageAsToken(uri) }
                             hintView = create<TextView>()
                                 .text("说点什么...")
                                 .textColor(if (mat) M3.hint else 0x80_FFFFFF.toInt())
@@ -562,6 +567,50 @@ fun sendImeImage(uri: Uri) {
             )
             Utils.log("IME image sent: $uri -> ${file.path}")
         }.onFailure { Utils.log("IME image send failed: $it") }
+    }.start()
+}
+
+/**
+ * Copy a pasted clipboard image URI into a temp file, build its pic element off the UI thread, then
+ * splice it into the inline input as an atomic "[图片]" token (so it's composed with the rest of the
+ * message and sent on the next send). If there is no live inline box to receive it — e.g. 完全行内输入
+ * is off — fall back to sending the image directly, matching [sendImeImage]. Top-level (not in a
+ * @Mixin body) so its Thread/Runnable lambdas have public constructors when copied to the target.
+ */
+fun pasteImeImageAsToken(uri: Uri) {
+    Thread {
+        runCatching {
+            val ctx = Utils.application
+            val mime = runCatching { ctx.contentResolver.getType(uri) }.getOrNull() ?: ""
+            val ext = when {
+                mime == "image/gif" -> "gif"
+                mime == "image/png" -> "png"
+                mime == "image/webp" -> "webp"
+                else -> "jpg"
+            }
+            val dir = ctx.getExternalFilesDir("photos") ?: ctx.filesDir
+            if (!dir.exists()) dir.mkdirs()
+            val file = File(dir, "qqpro_paste_${System.currentTimeMillis()}.$ext")
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(file).use { input.copyTo(it) }
+            }
+            if (!file.exists() || file.length() == 0L) {
+                Utils.log("paste image: empty file for $uri"); return@runCatching
+            }
+            val element = com.tencent.watch.aio_impl.ext.MsgUtil().a(file.path, 0)
+            momoi.mod.qqpro.util.runOnUi {
+                // insertElements returns false when no inline EditText is registered → send directly.
+                if (!InlineInput.insertElements(listOf(element))) {
+                    MsgUtil.msgService.sendMsg(
+                        CurrentContact, 0L, arrayListOf(element),
+                        IOperateCallback { code, msg -> Utils.log("paste image send result=$code msg=$msg") }
+                    )
+                    Utils.log("paste image: no inline box, sent directly $uri -> ${file.path}")
+                } else {
+                    Utils.log("paste image: inserted as token $uri -> ${file.path}")
+                }
+            }
+        }.onFailure { Utils.log("paste image failed: $it") }
     }.start()
 }
 

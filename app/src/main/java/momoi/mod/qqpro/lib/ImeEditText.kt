@@ -34,7 +34,40 @@ class ImageTag(val element: MsgElement) : InlineTag
 @Suppress("DEPRECATION")
 class ImeEditText(context: Context) : android.widget.EditText(context) {
 
+    /** IME rich-content commit (Gboard GIF/sticker picker) — an image was inserted via the keyboard. */
     var onImageUri: ((Uri) -> Unit)? = null
+
+    /** Clipboard PASTE of an image (paste menu / Ctrl+V) — carries the pasted image's content URI. */
+    var onImagePaste: ((Uri) -> Unit)? = null
+
+    /** The first image content URI on the clipboard, or null (nothing pasteable-as-image). */
+    private fun clipboardImageUri(): Uri? {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return null
+        val clip = cm.primaryClip ?: return null
+        for (i in 0 until clip.itemCount) {
+            val uri = clip.getItemAt(i).uri ?: continue
+            val type = runCatching { context.contentResolver.getType(uri) }.getOrNull() ?: continue
+            if (type.startsWith("image/")) return uri
+        }
+        return null
+    }
+
+    /**
+     * Intercept a clipboard PASTE that carries an image: instead of pasting the raw content-URI as
+     * text (or nothing), hand the URI to [onImagePaste] so the inline input can splice it in as an
+     * atomic "[图片]" token. Falls through to the default text paste when there is no image on the
+     * clipboard (or no handler wired).
+     */
+    override fun onTextContextMenuItem(id: Int): Boolean {
+        if (id == android.R.id.paste || id == android.R.id.pasteAsPlainText) {
+            val handler = onImagePaste
+            if (handler != null) {
+                val uri = clipboardImageUri()
+                if (uri != null) { handler(uri); return true }
+            }
+        }
+        return super.onTextContextMenuItem(id)
+    }
 
     /**
      * Invoked when backspace is pressed while the field is already empty. Return true to consume the
