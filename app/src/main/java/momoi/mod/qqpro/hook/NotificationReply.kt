@@ -55,11 +55,11 @@ private const val EXTRA_NOTIFY_ID = "qqpro_notify_id"
  * chat, and (c) an inline reply (RemoteInput) sends straight back to the chat.
  *
  * The native [NotificationFacade.r] funnels into a giant obfuscated builder whose notify id falls
- * back to a single shared id (-113) unless preview is on, and whose click intent stores `key_peerUin`
- * as a long while `MainActivity.onNewIntent` reads it as a String (so the tap never opens the chat).
- * We rebuild the notification ourselves with a per-uin id (512–521, the same range
- * [INotifySessionService.uniqueNotifyIdByUin] hands out — which is also used as the PendingIntent
- * request code, giving each chat a distinct tap target) and the peerUin stored as a String.
+ * back to a single shared id (-113) unless preview is on. We rebuild the notification ourselves with
+ * a per-uin id (512–521, the same range [INotifySessionService.uniqueNotifyIdByUin] hands out — which
+ * is also used as the PendingIntent request code, giving each chat a distinct tap target). The tap
+ * intent stores `key_peerUin` as a long (what the cold-start SplashFragment path expects); the warm
+ * `MainActivity.onNewIntent` path is bridged by [NotificationClickRedirect]. See its docs for why.
  *
  * Only the real Android-notification path is taken over (when `allow_notification` is on). When it's
  * off the base app broadcasts to the watch ROM instead — we leave that, and revoke/refresh passes,
@@ -132,7 +132,10 @@ private fun postChatNotification(facade: NotificationFacade, app: AppRuntime, ms
     val avatar: Bitmap? = resolveChatAvatar(app, msg, facade)
         ?: BitmapFactory.decodeResource(ctx.resources, ctx.applicationInfo.icon)
 
-    // Tap → open this exact chat (peerUin as a String, which MainActivity.onNewIntent expects).
+    // Tap → open this exact chat. key_peerUin is stored as a LONG: that's what the COLD-start path
+    // (SplashFragment.onResume) reads via getLongExtra — it bails on 0, so a String there silently
+    // breaks cold-start redirects. The WARM path (MainActivity.onNewIntent) reads getStringExtra, so
+    // [NotificationClickRedirect] synthesizes the String form from this long before super. See its docs.
     val clickIntent = Intent().apply {
         setClassName(ctx, "com.tencent.qqnt.watch.mainframe.MainActivity")
         action = "com.tencent.qqnt.watch.action.MAINACTIVITY"
@@ -142,7 +145,7 @@ private fun postChatNotification(facade: NotificationFacade, app: AppRuntime, ms
         putExtra("entrance", 6)
         putExtra("key_notification_click_action", true)
         putExtra("key_peerId", peerUid)
-        putExtra("key_peerUin", peerUin.toString())
+        putExtra("key_peerUin", peerUin)
         putExtra("key_chat_type", chatType)
         putExtra("key_chat_name", name)
     }
