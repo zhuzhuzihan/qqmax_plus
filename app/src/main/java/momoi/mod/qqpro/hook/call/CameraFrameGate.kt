@@ -24,6 +24,11 @@ import momoi.anno.mixin.Mixin
 @Mixin
 class CameraFrameGate(context: Context) : CameraUtils(context) {
     override fun a(bArr: ByteArray, i: Int, i2: Int, i3: Int, i4: Int, j: Long, z: Boolean) {
+        // Record the geometry the real (working, portrait) camera path feeds so screen share can
+        // reproduce the encoder aspect exactly. i=width, i2=height, i3=orientation index (0..3, a
+        // 90° step native rotates the frame by before encoding), i4=rotation, z=isFrontCamera.
+        // On this device: 640x480, orientation=3 → native rotates 270° → 480x640 portrait encode.
+        ScreenShare.onCameraGeometry(i, i2, i3)
         if (ScreenShare.sharing) {
             runCatching { FrameBufMgr.b().d(bArr, 0) }
             return

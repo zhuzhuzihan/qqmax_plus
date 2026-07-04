@@ -31,6 +31,7 @@ class ScreenShareService : Service() {
     private var handlerThread: HandlerThread? = null
     private var handler: Handler? = null
     private var nv21: ByteArray? = null
+    private var plan: ScreenShare.CapturePlan? = null
     @Volatile private var busy = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -59,9 +60,10 @@ class ScreenShareService : Service() {
     }
 
     private fun startCapture(code: Int, data: Intent) {
-        val w = ScreenShare.captureWidth()
-        val h = ScreenShare.captureHeight()
-        nv21 = ByteArray(w * h * 3 / 2)
+        val metrics = resources.displayMetrics
+        val p = ScreenShare.capturePlan(metrics.widthPixels, metrics.heightPixels)
+        plan = p
+        nv21 = ByteArray(p.outW * p.outH * 3 / 2)
 
         val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val mp = mpm.getMediaProjection(code, data) ?: run { stopSelf(); return }
@@ -76,53 +78,68 @@ class ScreenShareService : Service() {
         }, handler)
 
         val dpi = resources.displayMetrics.densityDpi.takeIf { it > 0 } ?: DisplayMetrics.DENSITY_DEFAULT
-        val ir = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 3)
+        val ir = ImageReader.newInstance(p.captureW, p.captureH, PixelFormat.RGBA_8888, 3)
         reader = ir
-        ir.setOnImageAvailableListener({ onFrame(it, w, h) }, handler)
+        ir.setOnImageAvailableListener({ onFrame(it) }, handler)
 
         virtualDisplay = mp.createVirtualDisplay(
-            "qqpro-screenshare", w, h, dpi,
+            "qqpro-screenshare", p.captureW, p.captureH, dpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             ir.surface, null, handler,
         )
         ScreenShare.onServiceStarted(applicationContext)
-        Utils.log("ScreenShareService: capturing ${w}x$h dpi=$dpi")
+        Utils.log("ScreenShareService: capturing ${p.captureW}x${p.captureH} portraitCrop=${p.outW}x${p.outH}@(${p.cropLeft},${p.cropTop}) -> land ${p.outH}x${p.outW} orient=${ScreenShare.cameraOrientation()} dpi=$dpi")
     }
 
-    private fun onFrame(ir: ImageReader, w: Int, h: Int) {
+    private fun onFrame(ir: ImageReader) {
         if (busy) { runCatching { ir.acquireLatestImage()?.close() }; return }
         busy = true
         runCatching {
+            val p = plan ?: run { busy = false; return }
             val image = ir.acquireLatestImage() ?: run { busy = false; return }
             image.use { img ->
                 val plane = img.planes[0]
                 val buf = plane.buffer
-                val pixelStride = plane.pixelStride
-                val rowStride = plane.rowStride
-                rgbaToNv21(buf, w, h, pixelStride, rowStride, nv21!!)
+                rgbaToNv21Rotated(buf, p, plane.pixelStride, plane.rowStride, nv21!!)
             }
-            ScreenShare.feedFrame(nv21!!, w, h)
+            // Sent buffer is the LANDSCAPE encoder frame (portrait crop rotated 90°): w=cropH, h=cropW.
+            ScreenShare.feedFrame(nv21!!, p.outH, p.outW, ScreenShare.cameraOrientation())
         }.onFailure { Utils.log("ScreenShareService: onFrame failed: $it") }
         busy = false
     }
 
-    /** BT.601 video-range RGBA → NV21 (Y plane + interleaved VU), 2x2 chroma subsample. */
-    private fun rgbaToNv21(
-        buf: java.nio.ByteBuffer, w: Int, h: Int, pixelStride: Int, rowStride: Int, out: ByteArray,
+    /**
+     * BT.601 video-range RGBA → NV21 (Y plane + interleaved VU), 2x2 chroma subsample, WITH a 90°
+     * rotation. The screen is captured upright/portrait, but the video encoder frame is LANDSCAPE
+     * (the camera feeds landscape + an orientation index the peer rotates by). So we rotate the
+     * portrait crop (outW x outH, at cropLeft/cropTop in the captured buffer) into a landscape
+     * outH x outW buffer here; [ScreenShare.feedFrame] then tags it with the camera's orientation so
+     * the peer rotates it back upright. [ROTATE_CW] flips the rotation direction if it comes out
+     * upside-down.
+     */
+    private fun rgbaToNv21Rotated(
+        buf: java.nio.ByteBuffer, p: ScreenShare.CapturePlan, pixelStride: Int, rowStride: Int, out: ByteArray,
     ) {
-        val frameSize = w * h
+        val cropW = p.outW           // portrait crop width  (e.g. 480)
+        val cropH = p.outH           // portrait crop height (e.g. 640)
+        val ow = cropH               // landscape output width  (e.g. 640)
+        val oh = cropW               // landscape output height (e.g. 480)
+        val frameSize = ow * oh
         var yIndex = 0
         var uvIndex = frameSize
-        for (y in 0 until h) {
-            val rowStart = y * rowStride
-            for (x in 0 until w) {
-                val off = rowStart + x * pixelStride
+        for (oy in 0 until oh) {
+            for (ox in 0 until ow) {
+                // Map landscape output pixel back to the portrait crop, applying a 90° rotation.
+                val cx: Int
+                val cy: Int
+                if (ROTATE_CW) { cx = oy; cy = cropH - 1 - ox } else { cx = cropW - 1 - oy; cy = ox }
+                val off = (p.cropTop + cy) * rowStride + (p.cropLeft + cx) * pixelStride
                 val r = buf.get(off).toInt() and 0xFF
                 val g = buf.get(off + 1).toInt() and 0xFF
                 val b = buf.get(off + 2).toInt() and 0xFF
                 val yy = (66 * r + 129 * g + 25 * b + 128 shr 8) + 16
                 out[yIndex++] = yy.coerceIn(0, 255).toByte()
-                if (y % 2 == 0 && x % 2 == 0) {
+                if (oy % 2 == 0 && ox % 2 == 0) {
                     val u = (-38 * r - 74 * g + 112 * b + 128 shr 8) + 128
                     val v = (112 * r - 94 * g - 18 * b + 128 shr 8) + 128
                     out[uvIndex++] = v.coerceIn(0, 255).toByte()
@@ -162,5 +179,8 @@ class ScreenShareService : Service() {
         const val EXTRA_DATA = "data"
         private const val CHANNEL = "qqpro_screenshare"
         private const val NOTI_ID = 0x5C31
+
+        /** 90° rotation direction into the landscape encoder frame; flip if the peer shows it inverted. */
+        private const val ROTATE_CW = true
     }
 }
