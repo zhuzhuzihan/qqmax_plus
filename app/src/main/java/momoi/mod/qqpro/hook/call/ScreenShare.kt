@@ -3,6 +3,8 @@ package momoi.mod.qqpro.hook.call
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import com.tencent.activitys.QQNTC2CWatchActivity
+import com.tencent.av.camera.AndroidCamera
 import com.tencent.av.camera.CameraUtils
 import com.tencent.av.opengl.GraphicRenderMgr
 import com.tencent.qav.thread.ThreadManager
@@ -80,6 +82,7 @@ object ScreenShare {
 
     /** Long-press entry: start consent flow, or stop an active share. */
     fun toggle(activity: Activity) {
+        callActivity = java.lang.ref.WeakReference(activity)
         if (sharing) {
             stop(activity)
         } else {
@@ -115,27 +118,83 @@ object ScreenShare {
             .onFailure { Utils.log("ScreenShare: stop service failed: $it") }
     }
 
+    // Whether the local camera/video was ON when the share started. Determines how we restore state
+    // when it ends: reopen the camera (was on) vs. tell the peer video is off (was off).
+    @Volatile private var wasVideoOn = false
+
+    // The call activity, used to drive its native camera toggle (activity.p) when the camera was off.
+    private var callActivity: java.lang.ref.WeakReference<Activity>? = null
+
     // ---- called by the service ----
 
-    /** Stop camera frames without dropping the call's local-video signal. */
+    /** Stop the real camera source; keep signalling video so the peer receives our injected frames. */
     fun onServiceStarted(context: Context) {
+        wasVideoOn = runCatching { AndroidCamera.a }.getOrDefault(false)
         sharing = true
-        runCatching { ThreadManager.b.post(cu(context)?.h ?: return) }
-            .onFailure { Utils.log("ScreenShare: close camera failed: $it") }
+        if (wasVideoOn) {
+            // Camera was on → release the hardware; the outgoing video pipeline stays up (proven), so
+            // the peer keeps receiving, now our injected screen frames.
+            runCatching { cu(context)?.h?.let { ThreadManager.b.post(it) } }
+                .onFailure { Utils.log("ScreenShare: close camera failed: $it") }
+        } else {
+            // Camera was off → the pipeline isn't running and the peer's "has video" flag is false, so
+            // the peer would never show our frames. Turn video ON through the native camera toggle,
+            // which sets the session flag + starts the pipeline + notifies the peer (raw start-video
+            // alone doesn't sync the flag). [CameraFrameGate] drops the now-live camera frames while
+            // sharing, so only our screen frames go out.
+            clickNativeCameraToggle()
+        }
         MaterialCallUi.refreshCameraIcons()
+        scheduleIconRefresh()
         Utils.toast(context, "屏幕共享已开启")
     }
 
-    /** Resume the camera when the share ends. */
+    /** Restore the pre-share video state when the share ends. */
     fun onServiceStopped(context: Context) {
         sharing = false
-        runCatching { cu(context)?.d(0L) }.onFailure { Utils.log("ScreenShare: reopen camera failed: $it") }
+        if (wasVideoOn) {
+            // Camera was on before → resume it; the video pipeline keeps running.
+            runCatching { cu(context)?.d(0L) }.onFailure { Utils.log("ScreenShare: reopen camera failed: $it") }
+        } else {
+            // Camera was off before → turn video back OFF through the native toggle. This clears the
+            // session flag + stops the pipeline + notifies the peer, so the peer drops our last (frozen)
+            // frame and shows their own camera fullscreen instead of a stuck black box.
+            clickNativeCameraToggle()
+        }
         MaterialCallUi.refreshCameraIcons()
+        scheduleIconRefresh()
         Utils.toast(context, "屏幕共享已停止")
     }
 
-    /** Orientation quarter-turn the peer applies to our frame — same value the camera path uses. */
-    fun cameraOrientation(): Int = camOrientation
+    /**
+     * Re-run the camera-icon refresh after the async camera work settles. The camera toggle / reopen
+     * happens on a binder + the camera thread, so reading the state synchronously (in
+     * [onServiceStopped]/[onServiceStarted]) sees the OLD value and the icon sticks. Poll a couple of
+     * times over ~1s so the icon lands on the final state. Mirrors [CameraCycle.advance]'s 450ms post.
+     */
+    private fun scheduleIconRefresh() {
+        val decor = callActivity?.get()?.window?.decorView ?: return
+        for (delay in longArrayOf(450L, 900L)) {
+            runCatching { decor.postDelayed({ MaterialCallUi.refreshCameraIcons() }, delay) }
+        }
+    }
+
+    /**
+     * Click the call activity's native camera on/off button (`activity.p`) on the UI thread. This runs
+     * the full, correct toggle sequence (`QavC2CSession.k` flag + `enableLocalVideoSend` + peer
+     * notification) — the same path as the user tapping the button — which raw `C2COperatorImpl.f()`
+     * does not (it flips only the media pipeline, leaving the flag and peer UI out of sync).
+     */
+    private fun clickNativeCameraToggle() {
+        val activity = callActivity?.get() ?: run { Utils.log("ScreenShare: no activity for camera toggle"); return }
+        activity.runOnUiThread {
+            runCatching {
+                val toggle = (activity as? QQNTC2CWatchActivity)?.p as? android.view.View
+                toggle?.performClick()
+                Utils.log("ScreenShare: native camera toggle clicked (found=${toggle != null})")
+            }.onFailure { Utils.log("ScreenShare: native camera toggle failed: $it") }
+        }
+    }
 
     /**
      * Inject one screen frame into the outgoing video, exactly as the camera preview callback does.

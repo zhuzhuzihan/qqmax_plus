@@ -88,11 +88,12 @@ class ScreenShareService : Service() {
             ir.surface, null, handler,
         )
         ScreenShare.onServiceStarted(applicationContext)
-        Utils.log("ScreenShareService: capturing ${p.captureW}x${p.captureH} portraitCrop=${p.outW}x${p.outH}@(${p.cropLeft},${p.cropTop}) -> land ${p.outH}x${p.outW} orient=${ScreenShare.cameraOrientation()} dpi=$dpi")
+        Utils.log("ScreenShareService: capturing ${p.captureW}x${p.captureH} portraitCrop=${p.outW}x${p.outH}@(${p.cropLeft},${p.cropTop}) -> land ${p.outH}x${p.outW} orient=$SEND_ORIENTATION dpi=$dpi")
     }
 
     private fun onFrame(ir: ImageReader) {
-        if (busy) { runCatching { ir.acquireLatestImage()?.close() }; return }
+        // If the share is stopping the ImageReader may close mid-frame → "buffer is inaccessible".
+        if (busy || !ScreenShare.sharing) { runCatching { ir.acquireLatestImage()?.close() }; return }
         busy = true
         runCatching {
             val p = plan ?: run { busy = false; return }
@@ -103,7 +104,10 @@ class ScreenShareService : Service() {
                 rgbaToNv21Rotated(buf, p, plane.pixelStride, plane.rowStride, nv21!!)
             }
             // Sent buffer is the LANDSCAPE encoder frame (portrait crop rotated 90°): w=cropH, h=cropW.
-            ScreenShare.feedFrame(nv21!!, p.outH, p.outW, ScreenShare.cameraOrientation())
+            // Orientation is FIXED (paired with ROTATE_CW) — the live camera value flips between 1 and 3
+            // across calls, and since our pre-rotation is fixed, a varying value flips the peer image
+            // upside-down. A constant orient + constant rotation is always upright.
+            ScreenShare.feedFrame(nv21!!, p.outH, p.outW, SEND_ORIENTATION)
         }.onFailure { Utils.log("ScreenShareService: onFrame failed: $it") }
         busy = false
     }
@@ -180,7 +184,11 @@ class ScreenShareService : Service() {
         private const val CHANNEL = "qqpro_screenshare"
         private const val NOTI_ID = 0x5C31
 
-        /** 90° rotation direction into the landscape encoder frame; flip if the peer shows it inverted. */
+        // Pre-rotation direction into the landscape encoder frame, and the orientation index we tell
+        // the peer to rotate BACK by. They are a matched pair: ROTATE_CW=true (pre-rotate +90°) pairs
+        // with orient=3 (peer rotates 270°) → net 0 → upright. If a device shows it inverted, flip
+        // BOTH together (ROTATE_CW=false with SEND_ORIENTATION=1).
         private const val ROTATE_CW = true
+        private const val SEND_ORIENTATION = 3
     }
 }

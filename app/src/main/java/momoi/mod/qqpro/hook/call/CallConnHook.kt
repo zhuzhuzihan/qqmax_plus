@@ -6,6 +6,7 @@ import com.tencent.activitys.QQNTC2CWatchActivity
 import com.tencent.activitys.`QQNTC2CWatchActivity$mServiceConnection$1`
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.util.Utils
 
 /**
  * QQ wires + re-tints the active-call control buttons (camera/mic/hangup) white/red inside the call
@@ -17,7 +18,12 @@ import momoi.mod.qqpro.Settings
 @Mixin
 class CallConnHook(p0: QQNTC2CWatchActivity) : `QQNTC2CWatchActivity$mServiceConnection$1`(p0) {
     override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-        super.onServiceConnected(name, service)
+        // Guard a native crash: onServiceConnected does Long.parseLong(peerUin), which throws
+        // NumberFormatException (hard-crashing the app to CrashReportActivity) when the Qav service
+        // (re)connects before peerUin is populated — a race the screen-share consent activity's
+        // lifecycle churn can trigger. Swallow it so the call survives; peerUin fills in shortly after.
+        runCatching { super.onServiceConnected(name, service) }
+            .onFailure { Utils.log("CallConnHook: onServiceConnected guarded: $it") }
         if (Settings.materializeCall.value) MaterialCallUi.rebuildActive(b)
     }
 }
