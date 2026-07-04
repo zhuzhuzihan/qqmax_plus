@@ -4,6 +4,7 @@ import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -217,10 +218,55 @@ object RichTitlebar {
         }.onFailure { Utils.log("RichTitlebar.build failed: $it") }
     }
 
-    // The bar's on-screen Y when the keyboard is closed (its un-panned position), captured live so we
-    // can pin the bar back there while the IME is up. Int.MIN_VALUE = not captured yet.
-    private var barBaselineTop: Int = Int.MIN_VALUE
     private var lastImeOpen: Boolean? = null
+    // The chat window's native soft-input mode (adjustPan), saved when we force adjustResize so it can
+    // be restored on chat exit. null = we haven't overridden it (nothing to restore).
+    private var savedSoftInputMode: Int? = null
+
+    /** Unwrap the hosting [android.app.Activity] from a view's context chain (null if none). */
+    private fun activityOf(v: View): android.app.Activity? {
+        var c: android.content.Context? = v.context
+        while (c is android.content.ContextWrapper) {
+            if (c is android.app.Activity) return c
+            c = c.baseContext
+        }
+        return null
+    }
+
+    /**
+     * Force the chat window to SOFT_INPUT_ADJUST_RESIZE. Root fix for the titlebar: natively the chat
+     * uses adjustPan, so opening the keyboard scrolls the WHOLE window up and shoves the top-anchored
+     * titlebar off the screen — which the old code fought with fragile translationY pinning (bar
+     * slides off anyway / doesn't reset on collapse). With adjustRESIZE the window shrinks instead, so
+     * the top bar stays put and the content (list + floating input) reflows above the keyboard. Only
+     * the ADJUST bits are changed; the STATE bits are preserved. The native mode is saved once so
+     * [restoreSoftInput] can put it back when the chat closes.
+     */
+    private fun forceResizeSoftInput(v: View) {
+        runCatching {
+            val win = activityOf(v)?.window ?: return
+            val cur = win.attributes.softInputMode
+            val adjust = cur and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST
+            // Never remember a resize mode as the "native" one (double-apply across preload/re-attach).
+            if (adjust != WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) savedSoftInputMode = cur
+            if (adjust != WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) {
+                val next = (cur and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or
+                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                win.setSoftInputMode(next)
+                Utils.log("RichTitlebar: softInputMode -> ADJUST_RESIZE (was mode=$cur)")
+            }
+        }.onFailure { Utils.log("RichTitlebar.forceResizeSoftInput failed: $it") }
+    }
+
+    /** Restore the window's native soft-input mode captured by [forceResizeSoftInput]. */
+    private fun restoreSoftInput(v: View) {
+        val saved = savedSoftInputMode ?: return
+        runCatching {
+            activityOf(v)?.window?.setSoftInputMode(saved)
+            Utils.log("RichTitlebar: softInputMode restored (mode=$saved)")
+        }.onFailure { Utils.log("RichTitlebar.restoreSoftInput failed: $it") }
+        savedSoftInputMode = null
+    }
 
     /**
      * React to soft-keyboard (IME) show/hide for the chat titlebar. The chat window uses
@@ -243,16 +289,18 @@ object RichTitlebar {
                 // Resolve the decor view at ATTACH time — at build time bar.rootView is still the bar
                 // itself, so observing it there would watch the wrong (non-panning) tree.
                 observed = v.rootView.viewTreeObserver.also { it.addOnGlobalLayoutListener(listener) }
+                forceResizeSoftInput(v)
             }
             override fun onViewDetachedFromWindow(v: View) {
                 runCatching { if (observed?.isAlive == true) observed?.removeOnGlobalLayoutListener(listener) }
                 observed = null
-                barBaselineTop = Int.MIN_VALUE
                 lastImeOpen = null
+                restoreSoftInput(v)
             }
         })
         if (bar.isAttachedToWindow) {
             observed = bar.rootView.viewTreeObserver.also { it.addOnGlobalLayoutListener(listener) }
+            forceResizeSoftInput(bar)
         }
     }
 
@@ -260,33 +308,20 @@ object RichTitlebar {
         runCatching {
             val open = isImeVisible(bar)
             val hideWhenTyping = Settings.hideTitlebarWhenTyping.value
-            val loc = IntArray(2)
-
-            if (!open) {
-                // Keyboard closed: fully restore, and capture the bar's un-panned top as the pin baseline.
-                if (bar.translationY != 0f) bar.translationY = 0f
+            // The window is forced to ADJUST_RESIZE (see forceResizeSoftInput), so the top bar no
+            // longer gets panned off-screen — there is NO translationY pinning to do (that was the
+            // source of the "slides off even in show mode" / "doesn't reset on collapse" bugs). Only
+            // the optional hide-while-typing remains. Clear any stale translationY defensively.
+            if (bar.translationY != 0f) bar.translationY = 0f
+            val show = !open || !hideWhenTyping
+            if (show) {
                 if (bar.visibility != View.VISIBLE) { bar.visibility = View.VISIBLE; bar.bringToFront() }
-                bar.getLocationOnScreen(loc)
-                barBaselineTop = loc[1]
-                if (lastImeOpen != false) { lastImeOpen = false; Utils.log("RichTitlebar: IME closed → show titlebar") }
-                return
-            }
-
-            // Keyboard open.
-            if (hideWhenTyping) {
-                if (bar.translationY != 0f) bar.translationY = 0f
-                if (bar.visibility != View.GONE) bar.visibility = View.GONE
-                if (lastImeOpen != true) { lastImeOpen = true; Utils.log("RichTitlebar: IME open → hide titlebar") }
             } else {
-                // Keep visible: pin against the pan. Nudge translationY so the bar's on-screen top
-                // returns to its closed baseline. Self-correcting across layout passes (delta→0).
-                if (bar.visibility != View.VISIBLE) { bar.visibility = View.VISIBLE; bar.bringToFront() }
-                if (barBaselineTop != Int.MIN_VALUE) {
-                    bar.getLocationOnScreen(loc)
-                    val delta = barBaselineTop - loc[1]
-                    if (delta != 0) bar.translationY += delta
-                }
-                if (lastImeOpen != true) { lastImeOpen = true; Utils.log("RichTitlebar: IME open → keep titlebar (pinned)") }
+                if (bar.visibility != View.GONE) bar.visibility = View.GONE
+            }
+            if (lastImeOpen != open) {
+                lastImeOpen = open
+                Utils.log("RichTitlebar: IME ${if (open) "open" else "closed"} → ${if (show) "show" else "hide"} titlebar (resize)")
             }
         }.onFailure { Utils.log("RichTitlebar.applyImeState failed: $it") }
     }
