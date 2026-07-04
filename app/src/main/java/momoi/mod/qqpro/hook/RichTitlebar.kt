@@ -211,14 +211,13 @@ object RichTitlebar {
             // Re-assert on top after the async ChatFragment view attaches (chat-only overlay).
             bar.bringToFront()
             root.post { bar.bringToFront() }
-            // Hide the bar while the soft keyboard is up (the IME pans/resizes the window and would
-            // otherwise push the title off the top of the watch screen); restore it when the IME hides.
-            attachImeWatcher(bar)
+            // Keyboard handling is done purely via the window soft-input mode (adjustResize when the
+            // bar should stay showing, native adjustPan when it should slide off) — no IME listener.
+            attachWindowMode(bar)
             Utils.log("RichTitlebar: built (name=$name group=$isGroup)")
         }.onFailure { Utils.log("RichTitlebar.build failed: $it") }
     }
 
-    private var lastImeOpen: Boolean? = null
     // The chat window's native soft-input mode (adjustPan), saved when we force adjustResize so it can
     // be restored on chat exit. null = we haven't overridden it (nothing to restore).
     private var savedSoftInputMode: Int? = null
@@ -269,74 +268,27 @@ object RichTitlebar {
     }
 
     /**
-     * React to soft-keyboard (IME) show/hide for the chat titlebar. The chat window uses
-     * `adjustPan`, so when the keyboard opens the whole window scrolls up and the top-anchored bar is
-     * physically pushed off the screen. Two behaviours, switched by [Settings.hideTitlebarWhenTyping]:
-     *  - ON (default): hide the bar (GONE) while the IME is up — a clean hide that frees the top strip
-     *    instead of the bar half-sliding off during the pan; restore it when the IME closes.
-     *  - OFF: keep the bar visible by pinning it against the pan (translateY back to its closed Y) so
-     *    it doesn't scroll off the top while typing.
-     *
-     * IME visibility comes from the window insets ([WindowInsets.Type.ime], API 30+, accurate under
-     * adjustPan). A global-layout listener on the (attach-time) decor view is the trigger. The
-     * listener is torn down on detach so a closed chat's view tree can be GC'd.
+     * Set the chat window's soft-input mode based on [Settings.hideTitlebarWhenTyping], applied while
+     * the titlebar is attached and restored on detach (chat exit). The window mode IS the whole
+     * mechanism now — the bar's visibility is never toggled and there is no IME listener:
+     *  - hide-while-typing OFF: force ADJUST_RESIZE → the keyboard shrinks the content and the
+     *    top-anchored bar stays put (the reliable "keep showing" behaviour).
+     *  - hide-while-typing ON: leave the native adjustPan → opening the keyboard pans the whole window
+     *    (and the top bar) up off the screen, so the bar naturally disappears while typing and slides
+     *    back when the keyboard closes. No detection, no translationY, nothing to reset.
+     * This is version-independent (no API-30 IME-inset dependency), so it works on Android 10 too.
      */
-    private fun attachImeWatcher(bar: View) {
-        var observed: android.view.ViewTreeObserver? = null
-        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener { applyImeState(bar) }
+    private fun attachWindowMode(bar: View) {
         bar.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {
-                // Resolve the decor view at ATTACH time — at build time bar.rootView is still the bar
-                // itself, so observing it there would watch the wrong (non-panning) tree.
-                observed = v.rootView.viewTreeObserver.also { it.addOnGlobalLayoutListener(listener) }
-                forceResizeSoftInput(v)
-            }
-            override fun onViewDetachedFromWindow(v: View) {
-                runCatching { if (observed?.isAlive == true) observed?.removeOnGlobalLayoutListener(listener) }
-                observed = null
-                lastImeOpen = null
-                restoreSoftInput(v)
-            }
+            override fun onViewAttachedToWindow(v: View) = applyWindowMode(v)
+            override fun onViewDetachedFromWindow(v: View) = restoreSoftInput(v)
         })
-        if (bar.isAttachedToWindow) {
-            observed = bar.rootView.viewTreeObserver.also { it.addOnGlobalLayoutListener(listener) }
-            forceResizeSoftInput(bar)
-        }
+        if (bar.isAttachedToWindow) applyWindowMode(bar)
     }
 
-    private fun applyImeState(bar: View) {
-        runCatching {
-            val open = isImeVisible(bar)
-            val hideWhenTyping = Settings.hideTitlebarWhenTyping.value
-            // The window is forced to ADJUST_RESIZE (see forceResizeSoftInput), so the top bar no
-            // longer gets panned off-screen — there is NO translationY pinning to do (that was the
-            // source of the "slides off even in show mode" / "doesn't reset on collapse" bugs). Only
-            // the optional hide-while-typing remains. Clear any stale translationY defensively.
-            if (bar.translationY != 0f) bar.translationY = 0f
-            val show = !open || !hideWhenTyping
-            if (show) {
-                if (bar.visibility != View.VISIBLE) { bar.visibility = View.VISIBLE; bar.bringToFront() }
-            } else {
-                if (bar.visibility != View.GONE) bar.visibility = View.GONE
-            }
-            if (lastImeOpen != open) {
-                lastImeOpen = open
-                Utils.log("RichTitlebar: IME ${if (open) "open" else "closed"} → ${if (show) "show" else "hide"} titlebar (resize)")
-            }
-        }.onFailure { Utils.log("RichTitlebar.applyImeState failed: $it") }
-    }
-
-    /** True when the soft keyboard is currently shown over [v]'s window. */
-    private fun isImeVisible(v: View): Boolean {
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            val insets = v.rootWindowInsets ?: return false
-            return insets.isVisible(android.view.WindowInsets.Type.ime())
-        }
-        // Pre-30 fallback (not reached on the watch): keyboard occupies >15% of the window height.
-        val r = android.graphics.Rect()
-        v.getWindowVisibleDisplayFrame(r)
-        val screenH = v.rootView.height
-        return screenH > 0 && screenH - r.bottom > screenH * 0.15
+    private fun applyWindowMode(v: View) {
+        // Only override when "keep showing" is wanted; hide-while-typing keeps the native adjustPan.
+        if (!Settings.hideTitlebarWhenTyping.value) forceResizeSoftInput(v)
     }
 
     /**
