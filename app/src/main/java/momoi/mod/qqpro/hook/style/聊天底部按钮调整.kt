@@ -76,9 +76,6 @@ import momoi.mod.qqpro.lib.material.M3
 import momoi.mod.qqpro.lib.material.MaterialSymbol
 import momoi.mod.qqpro.lib.material.MaterialSymbols
 
-// Last emitted inlineGrow debug line; used to suppress repeated identical logs across layout passes.
-private var lastInlineGrowLog = ""
-
 @Mixin
 class 聊天底部按钮调整() : `InputBarController$inputContent$2`() {
     @SuppressLint("ResourceType", "ClickableViewAccessibility")
@@ -199,6 +196,11 @@ class 聊天底部按钮调整() : `InputBarController$inputContent$2`() {
                         // the floating overlay global-layout passes are sparse (the list is static), so
                         // onEachLayout alone makes the bar grow only after a collapse/reopen.
                         var sliverBaseH = -1
+                        // Per-instance dedup for the grow log. MUST be per bar (captured here), not a
+                        // shared top-level global: two concurrently-attached bars (visible float + a
+                        // stale/neighbor footer instance) with different states would each invalidate
+                        // the other's dedup on a shared global, ping-ponging the log every frame.
+                        var lastInlineGrowLog = ""
                         val applyInlineGrow = fun() {
                             val parent = rootContainer.parent as? ViewGroup ?: return
                             var p: ViewGroup? = parent
@@ -235,12 +237,21 @@ class 聊天底部按钮调整() : `InputBarController$inputContent$2`() {
                                     sliver.layoutParams = slp
                                 }
                             }
-                            // applyInlineGrow runs on every layout pass; only log when the values
-                            // actually change so the debug log isn't spammed with identical lines.
-                            val inlineGrowMsg = "inlineGrow state=${runCatching { b.g }.getOrNull()} parent=${parent.javaClass.simpleName} inFooter=$inFooter lines=$lines target=$target sliverH=${sliver?.layoutParams?.height} rootTop=${rootContainer.top} rootH=${rootContainer.height}"
-                            if (inlineGrowMsg != lastInlineGrowLog) {
-                                lastInlineGrowLog = inlineGrowMsg
-                                Utils.log(inlineGrowMsg)
+                            // applyInlineGrow runs on EVERY global-layout pass (onEachLayout is an
+                            // OnGlobalLayoutListener, so it fires many times/second while scrolling or
+                            // typing). Dedup the log on the MEANINGFUL grow state ONLY. The old key
+                            // folded in the volatile geometry (rootTop/rootH), which shifts almost every
+                            // frame — so the dedup never matched and the log spammed qqpro_debug.log
+                            // (drowning the very inlineGrow transitions this line exists to show). The
+                            // geometry is still emitted for debugging, just not used to gate the log.
+                            // Include the InputBarController identity (ctrl) so multiple concurrent bar
+                            // instances (visible + a stale/leaked one) are distinguishable, and any
+                            // return of the footer/float reparent thrash (see InputBarAlwaysFloat) is
+                            // visible as this instance's state flipping rather than hidden by dedup.
+                            val inlineGrowKey = "state=${runCatching { b.g }.getOrNull()} inFooter=$inFooter lines=$lines target=$target sliverH=${sliver?.layoutParams?.height} ctrl=${System.identityHashCode(b)}"
+                            if (inlineGrowKey != lastInlineGrowLog) {
+                                lastInlineGrowLog = inlineGrowKey
+                                Utils.log("inlineGrow $inlineGrowKey parent=${parent.javaClass.simpleName} rootTop=${rootContainer.top} rootH=${rootContainer.height}")
                             }
                         }
                         // Materialized: split the pill into a reply/edit row on top of the input row.

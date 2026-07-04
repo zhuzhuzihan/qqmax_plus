@@ -23,6 +23,14 @@ fun View.replaceTextRecursive(from: String, to: String) {
 /**
  * Run [action] on every global layout pass. Non-inline so the SAM impl lives in
  * this package, not inside a @Mixin method body in another package.
+ *
+ * NOTE: this deliberately does NOT remove the listener on detach. For the chat input bar the
+ * continuous global-layout churn (the aggregate of every bar instance forcing re-layout) is what
+ * keeps the inline EditText from collapsing/disappearing when the window would otherwise settle —
+ * the perpetual refresh masks an underlying grow-layout bug. Scoping the listener to attach-state
+ * (so it stops firing once idle) makes the EditText vanish, so we keep the always-on behaviour. The
+ * per-frame LOG spam this used to cause is handled at the callsite by a per-instance dedup, not by
+ * throttling the layout callback.
  */
 fun View.onEachLayout(action: () -> Unit) {
     viewTreeObserver.addOnGlobalLayoutListener { action() }

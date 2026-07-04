@@ -36,6 +36,9 @@ class KeepInputBarOnScroll : `WatchAIOListVB$onCreateView$7`() {
         if (newState == RecyclerView.SCROLL_STATE_IDLE || newState == RecyclerView.SCROLL_STATE_DRAGGING) {
             CurrentMsgList.scrollSettledSinceOpen = true
         }
+        // Starting-in-float is handled structurally by InputBarAlwaysFloat (redirecting native
+        // showSliverInput to the float overlay), not from here — an IDLE-settle pop never fires on a
+        // chat that opens statically at the bottom (the list never leaves IDLE, so no callback).
     }
 
     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
