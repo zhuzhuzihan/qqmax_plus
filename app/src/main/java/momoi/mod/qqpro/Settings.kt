@@ -127,6 +127,9 @@ object Settings {
     val onlineStatusContactList = BooleanPref("onlineStatusContactList", true) // status text in friend list
     val onlineStatusTitlebar = BooleanPref("onlineStatusTitlebar", true)  // status line in DM chat titlebar
     val onlineStatusProfile = BooleanPref("onlineStatusProfile", true)    // status line on profile card (friend + group member)
+    // Show the system status bar (time/battery) instead of the app's fullscreen window; content is
+    // inset below it (edge-to-edge safe on Android 15+). Default off. Applied in StatusBarOption.
+    val showStatusBar = BooleanPref("showStatusBar", false)
     val backToFirstPage = BooleanPref("backToFirstPage", true)
     // When tapping a reply to jump to its source message, drop the page-load cap (normally ~1000
     // pages) and keep paging up until the source is found or the top of history is reached. Lets
@@ -523,7 +526,7 @@ object Settings {
         screenCornerDiameter, titlebarSideMargin,
         hideVoiceButton, muteHideInputBar, groupWholeMute,
         onlineStatusMainList, onlineStatusContactList, onlineStatusTitlebar, onlineStatusProfile,
-        backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
+        showStatusBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, hideTitlebarWhenTyping, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,
         replyFullSearch, useInAppCamera, gallerySortByDateTaken,
         galleryQuickSend, editSingleImageBeforeSend, useSystemImagePicker, useSystemAudioPicker, confirmOpenLink, wideUrlMatch, parseNumber, parseAtMember, highlightSelfMention, enableLinkPreview,

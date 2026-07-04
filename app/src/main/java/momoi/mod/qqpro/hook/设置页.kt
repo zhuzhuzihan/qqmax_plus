@@ -414,6 +414,7 @@ class 设置页 : SettingsActivity() {
             switch("点击当前页跳转未读", "已在某页时再次点击该页图标：消息页把下一条未读会话滚到顶部(循环)，联系人/动态页打开通知页面。需开启“显示未读数”", Settings.mainNavUnreadJump)
         },
         SettingsCategory("导航与滚动", "翻页、返回与表冠") {
+            switch("显示系统状态栏", "显示系统状态栏(时间/电量)，内容自动下移避让(适配安卓15+全面屏)；关闭则全屏隐藏状态栏。切换后需重启应用生效", Settings.showStatusBar)
             switch("返回先回首页", "不在首页时按返回先滑回第一页，已在首页才退出", Settings.backToFirstPage)
             switch("回复跳转加载全部", "点击回复跳转到源消息时不限制翻页次数，一直向上加载直到找到或到达历史顶端(较旧的源消息也能定位，可能较慢)", Settings.replyFullSearch)
             switch("屏蔽返回键", "用于把右滑当作返回的手表（如米兔）", Settings.blockBack)
