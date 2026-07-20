@@ -1,8 +1,9 @@
 package momoi.mod.qqpro.lib.material
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
-import android.view.View
 import android.view.animation.PathInterpolator
 
 /**
@@ -67,20 +68,21 @@ object M3Motion {
 }
 
 /**
- * A self-contained spring animator (no dynamicanimation dependency). Drives a single float from its
- * current value toward a target by integrating the damped harmonic oscillator ODE each frame, then
- * applies it via [onUpdate]. Use for Expressive press-recoil (button scale, switch thumb pop) where
- * a linear/eased ValueAnimator reads as mechanical.
+ * A self-contained spring animator (no dynamicanimation dependency). Drives a single float from
+ * [startFrom] toward a target by sampling the analytic damped-harmonic-oscillator solution each
+ * frame, then applies it via the update callback. Use for Expressive press-recoil (button scale,
+ * switch thumb pop) where a linear/eased ValueAnimator reads as mechanical.
  *
- *     SpringAnimator(view).stiffness(M3Motion.SpringStiffnessMedium)
+ *     SpringAnimator().stiffness(M3Motion.SpringStiffnessMedium)
  *         .dampingRatio(M3Motion.SpringDampingLowBouncy)
+ *         .startFrom(view.scaleX)
  *         .animateTo(1f) { v -> view.scaleX = v; view.scaleY = v }
  *
- * The integrator is the analytic solution of the spring ODE, advanced in fixed steps per animation
- * tick; for dampingRatio >= 1 it uses the over-damped/critical form (no oscillation), for < 1 the
- * under-damped form (with overshoot). Stable for any reasonable stiffness/damping.
+ * For dampingRatio >= 1 it uses the over-damped/critical form (no oscillation), for < 1 the
+ * under-damped form (with overshoot). On completion the update callback is emitted with exactly
+ * the target value, then [onEnd] fires.
  */
-class SpringAnimator(private val view: View) {
+class SpringAnimator {
     private var stiffness = M3Motion.SpringStiffnessMedium
     private var dampingRatio = M3Motion.SpringDampingNoBouncy
     private var startValue = 0f
@@ -95,9 +97,9 @@ class SpringAnimator(private val view: View) {
     fun onEnd(action: () -> Unit) = apply { onEnd = action }
 
     /**
-     * Drive [onUpdate] from the current value to [target]. The animation runs for an estimated
-     * duration that covers the settle (a few periods of the natural frequency), sampling the analytic
-     * spring solution each frame — so it lands precisely on [target] with the configured bounce.
+     * Drive [onUpdate] from [startFrom] to [target], sampling the analytic spring solution each
+     * frame for an estimated settle duration, then snapping exactly onto [target] (the sampled
+     * curve alone would stop wherever the envelope happens to be when the clock runs out).
      */
     fun animateTo(target: Float, onUpdate: (Float) -> Unit) {
         this.targetValue = target
@@ -105,9 +107,14 @@ class SpringAnimator(private val view: View) {
         animator?.cancel()
         val from = startValue
         if (from == target) { onUpdate(target); onEnd?.invoke(); return }
-        // Estimate settle time: ~4 natural periods, capped so a stiff spring is still snappy.
+        // Settle time = ~4 time constants of the envelope decay rate. The envelope decays as
+        // e^(-ζω·t) when under-damped (slowest root ω·(ζ-√(ζ²-1)) when over-damped) — NOT as
+        // e^(-ω·t), so the rate must include the damping ratio or a bouncy spring gets cut off
+        // mid-oscillation, away from the target.
         val omega = Math.sqrt(stiffness.toDouble())           // natural angular freq (rad/s)
-        val settleMs = (4000.0 / omega).coerceIn(120.0, 900.0)
+        val z = dampingRatio.toDouble()
+        val decay = if (z < 1.0) z * omega else omega * (z - Math.sqrt(z * z - 1.0))
+        val settleMs = (4000.0 / decay).coerceIn(120.0, 1200.0)
         val a = ValueAnimator.ofFloat(0f, 1f).apply {
             duration = settleMs.toLong()
             addUpdateListener {
@@ -115,6 +122,15 @@ class SpringAnimator(private val view: View) {
                 val v = springValue(t, from.toDouble(), target.toDouble(), stiffness.toDouble(), dampingRatio.toDouble())
                 onUpdate(v.toFloat())
             }
+            addListener(object : AnimatorListenerAdapter() {
+                private var cancelled = false
+                override fun onAnimationCancel(animation: Animator) { cancelled = true }
+                override fun onAnimationEnd(animation: Animator) {
+                    if (cancelled) return
+                    onUpdate(target)
+                    onEnd?.invoke()
+                }
+            })
         }
         a.start()
         animator = a

@@ -7,10 +7,10 @@ import android.widget.TextView
 import momoi.mod.qqpro.lib.dp
 
 /**
- * A Material 3 Expressive button with **spring press-recoil** — the signature micro-interaction
- * that makes the UI feel alive. On press the button scales to 0.96 and on release springs back to
- * 1.0 with a slight overshoot (under-damped spring, not a linear tween). The background color is
- * animated smoothly via [TonalLiftDrawable].
+ * A Material 3 Expressive button with **spring press-recoil** — on press it scales to 0.96 and on
+ * release springs back to 1.0 with a slight overshoot (under-damped [SpringAnimator], not a linear
+ * tween). Self-contained: no com.google.android.material dependency (the watch theme isn't
+ * MaterialComponents-based, so a real Material button would crash).
  *
  * Variants mirror MD3:
  *  - [FILLED]            solid primary, on-primary label (high emphasis)
@@ -18,26 +18,27 @@ import momoi.mod.qqpro.lib.dp
  *  - [TEXT]              no container, accent label (low emphasis)
  *  - [OUTLINED]          outline stroke, accent label
  *  - [ERROR]             translucent error container, error label
+ *
+ * Public on purpose: a @Mixin body referencing it needs it public (else runtime IllegalAccessError).
  */
 class M3Button(ctx: Context) : TextView(ctx) {
 
     enum class Variant { FILLED, TONAL, TEXT, OUTLINED, ERROR }
 
     private var pressSpring: SpringAnimator? = null
-        private var releaseDelayMs = 100L  // small delay so the recoil feels intentional, not a glitch
+    private val releaseDelayMs = 100L  // small delay so the recoil feels intentional, not a glitch
 
     init {
         gravity = Gravity.CENTER
         isSingleLine = true
         textSize = 14f
         typeface = Typeface.DEFAULT_BOLD
-        setPadding(24.dp, 12.dp, 24.dp, 12.dp)
+        setPadding(20.dp, 9.dp, 20.dp, 9.dp)
         isClickable = true
         isFocusable = true
-        // Spring press-recoil: 0.96 on down, spring back with gentle overshoot. Slower spring (low
-        // stiffness + medium bouncy — same recipe as M3Switch thumb pop, which reads as lively but
-        // never twitchy) and a 60ms delay before the release animation so the recoil feels like a
-        // deliberate "lift", not an instant snap on every tap.
+        // Spring press-recoil: 0.96 on down, spring back with gentle overshoot (low stiffness +
+        // medium-bouncy damping reads as lively but never twitchy). releaseDelayMs before the
+        // release animation makes the recoil feel like a deliberate "lift", not an instant snap.
         setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 android.view.MotionEvent.ACTION_DOWN -> {
@@ -58,7 +59,7 @@ class M3Button(ctx: Context) : TextView(ctx) {
 
     private val releaseRunnable = Runnable {
         val v = this
-        pressSpring = SpringAnimator(v)
+        pressSpring = SpringAnimator()
             .stiffness(M3Motion.SpringStiffnessLow)        // slower settle — visible, expressive
             .dampingRatio(M3Motion.SpringDampingMediumBouncy) // one soft overshoot
             .startFrom(0.96f)
