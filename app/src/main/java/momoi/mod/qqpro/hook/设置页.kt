@@ -65,7 +65,9 @@ import momoi.mod.qqpro.lib.textSize
 import momoi.mod.qqpro.lib.vertical
 import momoi.mod.qqpro.lib.width
 import momoi.mod.qqpro.util.ChatBackground
+import momoi.mod.qqpro.util.ChatDbRecovery
 import momoi.mod.qqpro.util.SettingsBackup
+import momoi.mod.qqpro.util.runOnUi
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.watchdog.LogExporter
 import momoi.mod.qqpro.watchdog.DebugActivity
@@ -542,6 +544,36 @@ class 设置页 : SettingsActivity() {
             }
             actionCard("调试菜单", "查看设备信息与调试日志，可复制/分享/保存") {
                 startActivity(Intent(this@设置页, DebugActivity::class.java))
+            }
+            // Emergency recovery for a corrupted chat-record DB (nt_msg.db).
+            //
+            // Why this exists: when nt_msg.db is corrupted, message loading fails SILENTLY (the chat
+            // shows as empty with no error) and the in-app 清空聊天记录 cannot help — it only issues a
+            // logical DELETE against the same broken file. The reliable fix is to delete the DB file
+            // so the kernel recreates it and re-syncs from the server. We ALWAYS back the file up
+            // first (fail-safe: refuse to delete if the backup fails) so the local history is not
+            // lost irrecoverably. See ChatDbRecovery for details.
+            actionCard("修复聊天记录", "聊天记录加载异常时：先备份再删除损坏的数据库文件，重启 QQ 后从服务器恢复(本地历史将清空，保留于备份文件)") {
+                momoi.mod.qqpro.hook.view.ConfirmFragment(
+                    title = "将备份并删除本地聊天记录数据库？\n\n删除后需重启 QQ，消息将从服务器重新同步；本地历史会保存到备份文件夹，可导出。",
+                    confirmLabel = "备份并删除",
+                    destructive = true,
+                ) {
+                    Thread {
+                        val r = ChatDbRecovery.backupAndDelete(this@设置页)
+                        runOnUi {
+                            Utils.toast(
+                                this@设置页,
+                                when {
+                                    r.backedUpTo == null -> "备份失败，未删除任何文件(请检查存储空间)"
+                                    r.deleted.isEmpty() -> "未发现损坏的聊天记录文件(可能已正常)"
+                                    else -> "已删除 ${r.deleted.size} 个文件，备份于:\n${r.backedUpTo.absolutePath}\n请重启 QQ 生效"
+                                },
+                                longDuration = true
+                            )
+                        }
+                    }.start()
+                }
             }
             actionCard("崩溃 / 卡死测试", "主动触发崩溃或卡死，验证报告功能") {
                 startActivity(Intent(this@设置页, WatchdogTestActivity::class.java))
