@@ -26,6 +26,13 @@ import momoi.mod.qqpro.util.ThreadManager
 import momoi.mod.qqpro.util.Utils
 import momoi.mod.qqpro.util.runOnUi
 import java.util.LinkedList
+import com.tencent.qqnt.kernel.api.impl.MsgService
+import com.tencent.qqnt.kernel.nativeinterface.Contact
+import com.tencent.qqnt.kernel.nativeinterface.IAddJsonGrayTipMsgCallback
+import com.tencent.qqnt.kernel.nativeinterface.JsonGrayElement
+import com.tencent.qqnt.msg.KernelServiceUtil
+import org.json.JSONArray
+import org.json.JSONObject
 
 object CurrentMsgList {
     lateinit var vb: WatchAIOListVB
@@ -363,11 +370,40 @@ object CurrentMsgList {
         recalledKept[key] = orig
         if (recallToasted.add(rec.msgId)) {
             if (recallToasted.size > 500) recallToasted.clear()
-            val who = revoke.operatorNick?.takeIf { it.isNotBlank() } ?: "对方"
+            val who = sequenceOf(revoke.operatorNick, revoke.operatorRemark, revoke.operatorMemRemark)
+                .firstOrNull { !it.isNullOrBlank() } ?: "对方"
             runOnUi { Utils.toast(Utils.application, "${who}撤回了一条消息，已保留原文") }
+            insertRecallTip(who)
         }
         Utils.log("AntiRecall: kept msgId=${rec.msgId} operator=${revoke.operatorUid}")
         return orig
+    }
+
+    /**
+     * QAuxiliary 式"尝试撤回"本地灰条:原文保留的同时,在聊天里插一条居中提示
+     * ("xxx尝试撤回了一条消息"),否则用户看不出这里发生过撤回。JSON 灰条格式与 busiId
+     * (2021 私聊 / 2022 群)照抄 QAuxiliary 的 NtGrayTipHelper;只用纯文本项,不带可点击
+     * 的原文引用。插入失败只记日志,不影响原文保留。每 msgId 一次(由调用方保证)。
+     */
+    private fun insertRecallTip(who: String) {
+        runCatching {
+            val contact = Contact(CurrentContact.chatType, CurrentContact.peerUid, CurrentContact.guildId)
+            val text = "${who}尝试撤回了一条消息"
+            val json = JSONObject().apply {
+                put("align", "center")
+                put("items", JSONArray().apply {
+                    put(JSONObject().apply { put("txt", text); put("type", "nor") })
+                })
+            }.toString()
+            val busiId = if (CurrentContact.isGroup) 2022L else 2021L
+            val element = JsonGrayElement(busiId, json, text, false, null)
+            val svc = (KernelServiceUtil.c() as? MsgService)?.service
+                ?: run { Utils.log("AntiRecall: msg service null, tip skipped"); return }
+            svc.addLocalJsonGrayTipMsg(contact, element, true, true,
+                IAddJsonGrayTipMsgCallback { result, _ ->
+                    if (result != 0) Utils.log("AntiRecall: tip insert failed result=$result")
+                })
+        }.onFailure { Utils.log("AntiRecall: tip insert threw: $it") }
     }
 
     @Mixin
