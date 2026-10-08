@@ -366,6 +366,14 @@ object CurrentMsgList {
             // empty RecyclerView (incoming list size 0 → blank chat) is distinguishable from a
             // render-side problem (non-zero list but cells invisible). peer ties it to the chat.
             Utils.log("MsgList.n: peer=${CurrentContact.peerUid} updateType=$updateType incomingSize=${list.size} mirrorSize=${msg.size} types=[${list.take(8).joinToString(",") { runCatching { "${it.d.msgType}/${it.javaClass.simpleName}" }.getOrElse { "?" } }}]")
+            // 防撤回(预处理):对方撤回把原消息原地改写成灰条(同 msgId),先把这类灰条从本次 state 里
+            // 剔除,镜像里的原文自然保留并参与后续合并。必须在这里做:下面的循环遇到首个已存在的
+            // 消息就 break,剩下未处理的 incoming 会被原样带进渲染——若灰条恰好落在未处理区(例如
+            // 自己发消息触发的 state 推送,新消息先命中 break),灰条会连原文一起写回镜像,防撤回失效。
+            val incoming = list.iterator()
+            while (incoming.hasNext()) {
+                if (recallPreserved(incoming.next(), msg) != null) incoming.remove()
+            }
             var insertIndex = -1
             while (true) {
                 val last = list.pollLast()
