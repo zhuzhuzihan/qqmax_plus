@@ -129,10 +129,10 @@ object Settings {
     val groupWholeMute = BooleanPref("groupWholeMute", true)
     // Anti-recall (防撤回): when someone else recalls a message, keep showing the original text instead
     // of the "recalled" grey tip. Implemented at the CurrentMsgList merge point: the recall rewrite
-    // (same msgId → grey tip with a revokeElement) is swapped back for the mirrored original. Recalls
-    // initiated by self (including message-edit = recall + resend, and self admin recalls) are always
-    // honored so editing doesn't duplicate. The kernel DB is still updated, so re-entering the chat
-    // shows the recall tip again. Default on.
+    // (same msgId → grey tip with a revokeElement) is swapped back for the mirrored original, which is
+    // also stashed process-wide so re-entering the chat still restores the text. Recalls initiated by
+    // self (including message-edit = recall + resend, and self admin recalls) are always honored so
+    // editing doesn't duplicate. The stash is in-memory only (cleared on app restart). Default on.
     val antiRecall = BooleanPref("antiRecall", true)
     // Online-presence display (friends + group members). Presence needs kernel status polling, so it
     // only starts when at least one of these is on. Default on. See OnlineStatus.kt.

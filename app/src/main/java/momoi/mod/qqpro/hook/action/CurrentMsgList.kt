@@ -48,6 +48,17 @@ object CurrentMsgList {
     // msgIds already toasted for anti-recall, so repeat kernel pushes of the same recall don't spam.
     private val recallToasted = mutableSetOf<Long>()
 
+    /**
+     * Anti-recall stash: original items (keyed peerUid_msgId), surviving chat re-entry. The kernel DB
+     * is rewritten to the grey tip on recall and [Clear] resets the [msgList] mirror on re-entry, so
+     * without this the preserved text would be lost when the chat is reopened. LRU-capped; items are
+     * pure data (MsgRecord + display flags, no views), so retention is cheap.
+     */
+    private val recalledKept = object : LinkedHashMap<String, WatchAIOMsgItem>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, WatchAIOMsgItem>): Boolean =
+            size > 128
+    }
+
     fun getMsgIndex(msg: WatchAIOMsgItem): Int {
         return msgList.value.indexOf(msg)
     }
@@ -328,6 +339,10 @@ object CurrentMsgList {
      * Recalls initiated by self are always honored — isSelfOperate (own recall, message-edit which is
      * recall + resend) or operatorUid == self (self admin recall) — so editing doesn't leave the
      * original plus the edited copy.
+     *
+     * Preserved originals are also stashed in [recalledKept]: re-entering the chat reloads the
+     * kernel-rewritten grey tip into a fresh mirror, so the stash (not the mirror) is what restores
+     * the text then.
      */
     private fun recallPreserved(last: WatchAIOMsgItem, msg: List<WatchAIOMsgItem>): WatchAIOMsgItem? {
         if (!Settings.antiRecall.value) return null
@@ -336,9 +351,16 @@ object CurrentMsgList {
         val revoke = runCatching { rec.elements?.firstOrNull()?.grayTipElement?.revokeElement }.getOrNull()
             ?: return null
         if (revoke.isSelfOperate || revoke.operatorUid == SelfContact.peerUid) return null
-        val orig = msg.firstOrNull { it.d.msgId == rec.msgId } ?: return null
-        if (orig.d.msgType == NTMsgType.GRAYTIPS) return null
+        val key = "${CurrentContact.peerUid}_${rec.msgId}"
+        val orig = msg.firstOrNull { it.d.msgId == rec.msgId }
+            ?: recalledKept[key]
+            ?: return null
+        if (orig.d.msgType == NTMsgType.GRAYTIPS) {
+            recalledKept.remove(key)
+            return null
+        }
         if (orig.d.senderUid == SelfContact.peerUid) return null
+        recalledKept[key] = orig
         if (recallToasted.add(rec.msgId)) {
             if (recallToasted.size > 500) recallToasted.clear()
             val who = revoke.operatorNick?.takeIf { it.isNotBlank() } ?: "对方"
