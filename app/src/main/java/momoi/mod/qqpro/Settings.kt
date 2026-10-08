@@ -457,6 +457,18 @@ object Settings {
     // use (see Summarizer.userId) and persisted; blank means not yet generated.
     val installUuid = StringPref("installUuid", "")
 
+    // ===== MCP 服务器 =====
+    // Expose chat data + text sending as MCP (Model Context Protocol) tools over loopback HTTP, for
+    // local AI clients (Claude Desktop etc.) reaching the watch via `adb reverse`. Server lifecycle in
+    // mcp/McpServer.kt; tool surface in mcp/McpTools.kt.
+    // Master switch; the server only runs while this is on (toggled from the settings MCP section).
+    val mcpEnabled = BooleanPref("mcpEnabled", false)
+    // Loopback port the MCP server listens on. Default 8765 (unprivileged, unlikely to clash).
+    val mcpPort = IntPref("mcpPort", 8765)
+    // Bearer token every MCP request must present (Authorization: Bearer <token>). Generated on first
+    // view in the settings page; blank means not yet generated.
+    val mcpToken = StringPref("mcpToken", "")
+
     // ===== 聊天截图 (by AILIFE) =====
     // The "截图" entry's visibility now lives in 菜单自定义 ([longPressMenuOrder]). The options below
     // tune how the rendered screenshot looks.

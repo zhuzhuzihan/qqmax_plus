@@ -30,6 +30,9 @@ class 更新检查 : MainActivity() {
         }
         super.onCreate(savedInstanceState)
         Watchdog.install(this)
+        // Start the MCP server once at launch when enabled (mcp/McpServer.kt). start() is a no-op
+        // when the pref is off, so this is cheap. Toggle/restart also happens live from 设置 › MCP.
+        if (Settings.mcpEnabled.value) momoi.mod.qqpro.mcp.McpServer.start()
         // Start online-presence polling once at launch if any status surface is enabled (the kernel
         // won't push presence otherwise). Cheap no-op when all status toggles are off. See OnlineStatus.
         if (Settings.anyOnlineStatus) momoi.mod.qqpro.hook.action.OnlineStatus.start()

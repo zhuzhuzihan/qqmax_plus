@@ -30,8 +30,9 @@ object SummaryMessages {
             ?: (rec.senderUid?.takeIf { it.isNotEmpty() } ?: rec.senderUin.toString())
     }
 
-    /** Flattened text of a message, with media rendered as short placeholders. */
-    private fun textOf(rec: MsgRecord): String {
+    /** Flattened text of a message, with media rendered as short placeholders. Internal so the MCP
+     *  tool surface (mcp/McpTools) reuses the exact same placeholder scheme. */
+    internal fun textOf(rec: MsgRecord): String {
         val sb = StringBuilder()
         for (e in rec.elements) {
             when (e.elementType) {

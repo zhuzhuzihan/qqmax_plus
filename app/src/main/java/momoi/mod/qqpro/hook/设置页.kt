@@ -3,6 +3,8 @@ package momoi.mod.qqpro.hook
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Dialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ClipDrawable
@@ -510,6 +512,10 @@ class 设置页 : SettingsActivity() {
             selector("总结风格", "要点(Markdown列表)/一句话/详细", Settings.summarizeStyle, listOf("要点", "一句话", "详细"))
             summarizeLangSelector("总结语言", "总结输出的语言；自动=跟随会话本身的语言。过往总结记录可在好友/群聊设置页的“总结历史”查看")
         },
+        SettingsCategory("MCP 服务器", "把 QQ 暴露为 MCP 工具供 AI 调用") {
+            section("MCP 服务器", "在手表本地启动一个 Model Context Protocol (MCP) 服务器，AI 客户端（如 Claude）可通过 adb reverse 调用这些工具读取会话/发送消息。")
+            mcpSection()
+        },
         SettingsCategory("关于与更新", "版本更新") {
             switch("自动检查更新", "启动时检查 QQ Max 新版本，可在关于页手动检查", Settings.autoUpdateCheck)
             actionCard("立即检查更新", "现在就检查 QQ Max 是否有新版本") {
@@ -548,6 +554,116 @@ class 设置页 : SettingsActivity() {
             }
         },
     )
+
+    /**
+     * MCP server controls: master switch, port, token (tap to copy), and a live usage hint showing
+     * the exact adb reverse command for the configured port. State label + switch are kept in sync
+     * from the live server (McpServer.isRunning), not just the pref, so a crash of the accept loop
+     * is visible.
+     */
+    private fun GroupScopeFix.mcpSection() {
+        // Master switch with a live status line under it.
+        card { card ->
+            lateinit var status: TextView
+            card.vertical()
+            card.content {
+                add<LinearLayout>().width(FILL).content {
+                    titleColumn("启用 MCP 服务器", "仅监听 127.0.0.1，外部需通过 adb reverse 访问").weight(1f)
+                    val sw = M3Switch(this@设置页)
+                    sw.setChecked(Settings.mcpEnabled.value, notify = false)
+                    sw.onChange = { on ->
+                        Settings.mcpEnabled.value = on
+                        if (on) momoi.mod.qqpro.mcp.McpServer.start() else momoi.mod.qqpro.mcp.McpServer.stop()
+                        status.text = mcpStatusText()
+                    }
+                    add(sw)
+                }
+                status = add<TextView>()
+                    .text(mcpStatusText())
+                    .textSize(10f)
+                    .textColor(M3.hint)
+                    .padding(top = 4.dp)
+            }
+        }
+
+        // Port (tap to edit) — restarts the server so the new port takes effect immediately.
+        card { card ->
+            lateinit var portLabel: TextView
+            card.content {
+                titleColumn("端口", "MCP 服务器监听的本地端口").weight(1f)
+                portLabel = add<TextView>()
+                    .text(Settings.mcpPort.value.toString())
+                    .textSize(14f)
+                    .textColor(ACCENT)
+                    .gravity(Gravity.CENTER_VERTICAL)
+                    .padding(left = 12.dp)
+            }
+            card.rippleTouch()
+            card.onClick {
+                showNumberInput("端口", Settings.mcpPort.value.toFloat(), 1024f, 65535f) { v ->
+                    Settings.mcpPort.value = v.toInt()
+                    portLabel.text = v.toInt().toString()
+                    if (Settings.mcpEnabled.value) momoi.mod.qqpro.mcp.McpServer.restart()
+                }
+            }
+        }
+
+        // Token — generated lazily, tap to copy.
+        card { card ->
+            card.content {
+                titleColumn("访问令牌", "AI 客户端需携带此 Bearer 令牌；点击复制").weight(1f)
+                add<TextView>()
+                    .text(momoi.mod.qqpro.mcp.McpServer.token().take(8) + "…")
+                    .textSize(13f)
+                    .textColor(ACCENT)
+                    .gravity(Gravity.CENTER_VERTICAL)
+            }
+            card.rippleTouch()
+            card.onClick {
+                runCatching {
+                    getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText("mcp", momoi.mod.qqpro.mcp.McpServer.token()))
+                    Utils.toast(this@设置页, "令牌已复制")
+                }.onFailure { Utils.log("mcp: copy token failed: $it") }
+            }
+        }
+
+        // Copy-paste usage hint for the paired phone/computer.
+        card { card ->
+            card.vertical()
+            val cmd = "adb reverse tcp:${Settings.mcpPort.value} tcp:${Settings.mcpPort.value}"
+            card.content {
+                titleColumn("连接方式", "电脑/手机连接手表后执行，再在 MCP 客户端中添加服务器:").width(FILL)
+                add<TextView>()
+                    .text(cmd)
+                    .textSize(12f)
+                    .textColor(ACCENT)
+                    .padding(top = 6.dp, bottom = 6.dp)
+                add<TextView>()
+                    .text("命令: http://127.0.0.1:${Settings.mcpPort.value}/mcp")
+                    .textSize(10f)
+                    .textColor(M3.onSurfaceVariant)
+            }
+            card.rippleTouch()
+            card.onClick {
+                runCatching {
+                    getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText("adb", cmd))
+                    Utils.toast(this@设置页, "命令已复制")
+                }.onFailure { Utils.log("mcp: copy cmd failed: $it") }
+            }
+        }
+    }
+
+    /** Green "运行中" / grey "已停止" status line for the MCP section. */
+    private fun mcpStatusText(): String =
+        if (Settings.mcpEnabled.value && momoi.mod.qqpro.mcp.McpServer.isRunning) {
+            "● 运行中 · 127.0.0.1:${Settings.mcpPort.value}"
+        } else if (Settings.mcpEnabled.value) {
+            "○ 已启用，等待启动"
+        } else {
+            "○ 已关闭"
+        }
 
     private fun GroupScopeFix.section(title: String, subtitle: String) {
         add<TextView>()
