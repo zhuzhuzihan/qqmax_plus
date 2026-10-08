@@ -17,10 +17,13 @@ import kotlin.concurrent.thread
  * A minimal MCP (Model Context Protocol) HTTP server exposing QQ Max's chat data + send capability
  * to local AI clients (Claude Desktop, MCP inspectors, etc.).
  *
- * Transport: MCP "Streamable HTTP" subset, hand-rolled on a raw [ServerSocket] — the repo deliberately
- * ships no HTTP framework (see api/Http.kt for the same style). Requests are single JSON-RPC 2.0
- * objects (POST, Content-Type: application/json); responses are one JSON object (no SSE streaming —
- * our tools are request/response only). Clients that only need tools work fine against this.
+ * Transport: MCP "Streamable HTTP" (protocol 2025-03-26), hand-rolled on a raw [ServerSocket] — the
+ * repo deliberately ships no HTTP framework (see api/Http.kt for the same style). Each POST carries
+ * one JSON-RPC 2.0 object. Responses are spec-legal either way: SSE-framed (`event: message` +
+ * `data:`) when the client's Accept header lists text/event-stream, plain application/json otherwise
+ * (org.json emits single-line JSON, so the SSE data field is always newline-safe). JSON-RPC
+ * notifications get 202 Accepted with no body. The optional GET server-initiated stream is not
+ * offered (405) — this server has no server-initiated messages to push.
  *
  * Security: binds the loopback interface ONLY (the AI client runs on the paired phone/computer and
  * reaches the watch via `adb reverse tcp:PORT tcp:PORT` — same channel adb logcat already uses).
@@ -112,13 +115,21 @@ object McpServer {
             BufferedReader(InputStreamReader(client.inputStream, Charsets.UTF_8)).use { reader ->
                 val requestLine = reader.readLine() ?: return
                 val parts = requestLine.split(" ")
-                if (parts.size < 2 || !parts[0].equals("POST", ignoreCase = true)) {
-                    writeResponse(client, 405, jsonRpcError(null, -32600, "仅支持 POST"))
+                val httpMethod = parts.getOrElse(0) { "" }
+                if (httpMethod.equals("GET", ignoreCase = true)) {
+                    // Streamable HTTP's optional server-initiated SSE stream: we never push, so
+                    // reject with 405 exactly as the spec instructs for unsupported GETs.
+                    writeResponse(client, 405, "", sse = false)
+                    return
+                }
+                if (parts.size < 2 || !httpMethod.equals("POST", ignoreCase = true)) {
+                    writeResponse(client, 405, jsonRpcError(null, -32600, "仅支持 POST"), sse = false)
                     return
                 }
                 // Read headers; enforce the bearer token before touching the body.
                 var auth = ""
                 var contentLength = 0
+                var acceptsSse = false
                 while (true) {
                     val line = reader.readLine() ?: break
                     if (line.isEmpty()) break
@@ -128,15 +139,16 @@ object McpServer {
                     val value = line.substring(idx + 1).trim()
                     if (name == "authorization") auth = value
                     if (name == "content-length") contentLength = value.toIntOrNull() ?: 0
+                    if (name == "accept" && value.lowercase().contains("text/event-stream")) acceptsSse = true
                 }
                 val expected = "Bearer ${token()}"
                 if (auth != expected) {
-                    Utils.log("McpServer: unauthorized request (${parts[1]})")
-                    writeResponse(client, 401, jsonRpcError(null, -32001, "未授权：Bearer 令牌不匹配"))
+                    Utils.log("McpServer: unauthorized request (${parts.getOrElse(1) { "?" }})")
+                    writeResponse(client, 401, jsonRpcError(null, -32001, "未授权：Bearer 令牌不匹配"), sse = false)
                     return
                 }
                 if (contentLength <= 0 || contentLength > 1 shl 20) {
-                    writeResponse(client, 400, jsonRpcError(null, -32600, "请求体为空或过大"))
+                    writeResponse(client, 400, jsonRpcError(null, -32600, "请求体为空或过大"), sse = false)
                     return
                 }
                 val body = CharArray(contentLength)
@@ -149,9 +161,9 @@ object McpServer {
                 val response = dispatch(String(body, 0, read))
                 // JSON-RPC notifications (no id) get 202 Accepted with no body per the MCP spec.
                 if (response.isEmpty()) {
-                    writeResponse(client, 202, "")
+                    writeResponse(client, 202, "", sse = false)
                 } else {
-                    writeResponse(client, 200, response)
+                    writeResponse(client, 200, response, sse = acceptsSse)
                 }
             }
         } catch (e: Exception) {
@@ -240,12 +252,22 @@ object McpServer {
         put("error", JSONObject().apply { put("code", code); put("message", message) })
     }.toString()
 
-    /** Write one HTTP response; `body` empty means 204-style no content (JSON-RPC notification ack). */
-    private fun writeResponse(client: Socket, status: Int, body: String) {
-        val payload = if (body.isEmpty()) "" else body
+    /**
+     * Write one HTTP response. With [sse] the body is wrapped in a single SSE event frame
+     * (`event: message\ndata: <json>\n\n`) and served as text/event-stream — the JSON-RPC response
+     * arrives in one flush, so this is framing, not streaming. Notifications ([body] empty) write
+     * no body at all.
+     */
+    private fun writeResponse(client: Socket, status: Int, body: String, sse: Boolean) {
+        val contentType = if (sse) "text/event-stream" else "application/json"
+        val payload = when {
+            body.isEmpty() -> ""
+            sse -> "event: message\ndata: $body\n\n"
+            else -> body
+        }
         val head = buildString {
             append("HTTP/1.1 $status ${reason(status)}\r\n")
-            append("Content-Type: application/json\r\n")
+            append("Content-Type: $contentType\r\n")
             append("Content-Length: ${payload.toByteArray(Charsets.UTF_8).size}\r\n")
             append("Connection: close\r\n\r\n")
         }
