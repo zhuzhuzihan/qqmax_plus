@@ -4,8 +4,8 @@ import momoi.mod.qqpro.Settings
 import momoi.mod.qqpro.util.Utils
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -112,64 +112,96 @@ object McpServer {
     private fun handle(client: Socket) {
         try {
             client.soTimeout = 30_000
-            BufferedReader(InputStreamReader(client.inputStream, Charsets.UTF_8)).use { reader ->
-                val requestLine = reader.readLine() ?: return
-                val parts = requestLine.split(" ")
-                val httpMethod = parts.getOrElse(0) { "" }
-                if (httpMethod.equals("GET", ignoreCase = true)) {
-                    // Streamable HTTP's optional server-initiated SSE stream: we never push, so
-                    // reject with 405 exactly as the spec instructs for unsupported GETs.
-                    writeResponse(client, 405, "", sse = false)
-                    return
-                }
-                if (parts.size < 2 || !httpMethod.equals("POST", ignoreCase = true)) {
-                    writeResponse(client, 405, jsonRpcError(null, -32600, "仅支持 POST"), sse = false)
-                    return
-                }
-                // Read headers; enforce the bearer token before touching the body.
-                var auth = ""
-                var contentLength = 0
-                var acceptsSse = false
-                while (true) {
-                    val line = reader.readLine() ?: break
-                    if (line.isEmpty()) break
-                    val idx = line.indexOf(':')
-                    if (idx <= 0) continue
-                    val name = line.substring(0, idx).trim().lowercase()
-                    val value = line.substring(idx + 1).trim()
-                    if (name == "authorization") auth = value
-                    if (name == "content-length") contentLength = value.toIntOrNull() ?: 0
-                    if (name == "accept" && value.lowercase().contains("text/event-stream")) acceptsSse = true
-                }
-                val expected = "Bearer ${token()}"
-                if (auth != expected) {
-                    Utils.log("McpServer: unauthorized request (${parts.getOrElse(1) { "?" }})")
-                    writeResponse(client, 401, jsonRpcError(null, -32001, "未授权：Bearer 令牌不匹配"), sse = false)
-                    return
-                }
-                if (contentLength <= 0 || contentLength > 1 shl 20) {
-                    writeResponse(client, 400, jsonRpcError(null, -32600, "请求体为空或过大"), sse = false)
-                    return
-                }
-                val body = CharArray(contentLength)
-                var read = 0
-                while (read < contentLength) {
-                    val n = reader.read(body, read, contentLength - read)
-                    if (n < 0) break
-                    read += n
-                }
-                val response = dispatch(String(body, 0, read))
-                // JSON-RPC notifications (no id) get 202 Accepted with no body per the MCP spec.
-                if (response.isEmpty()) {
-                    writeResponse(client, 202, "", sse = false)
-                } else {
-                    writeResponse(client, 200, response, sse = acceptsSse)
-                }
+            val input = client.getInputStream()
+            // Read the head as raw bytes: Content-Length counts BYTES, and a char-based Reader would
+            // over-read on non-ASCII (e.g. Chinese) bodies and stall waiting for chars that never come.
+            val head = readHead(input) ?: return
+            val lines = String(head, Charsets.US_ASCII).split("\r\n")
+            val requestLine = lines.firstOrNull() ?: return
+            val parts = requestLine.split(" ")
+            val httpMethod = parts.getOrElse(0) { "" }
+            if (httpMethod.equals("GET", ignoreCase = true)) {
+                // Streamable HTTP's optional server-initiated SSE stream: we never push, so
+                // reject with 405 exactly as the spec instructs for unsupported GETs.
+                writeResponse(client, 405, "", sse = false)
+                return
+            }
+            if (parts.size < 2 || !httpMethod.equals("POST", ignoreCase = true)) {
+                writeResponse(client, 405, jsonRpcError(null, -32600, "仅支持 POST"), sse = false)
+                return
+            }
+            // Read headers; enforce the bearer token before touching the body.
+            var auth = ""
+            var contentLength = 0
+            var acceptsSse = false
+            for (i in 1 until lines.size) {
+                val line = lines[i]
+                if (line.isEmpty()) continue
+                val idx = line.indexOf(':')
+                if (idx <= 0) continue
+                val name = line.substring(0, idx).trim().lowercase()
+                val value = line.substring(idx + 1).trim()
+                if (name == "authorization") auth = value
+                if (name == "content-length") contentLength = value.toIntOrNull() ?: 0
+                if (name == "accept" && value.lowercase().contains("text/event-stream")) acceptsSse = true
+            }
+            val expected = "Bearer ${token()}"
+            if (auth != expected) {
+                Utils.log("McpServer: unauthorized request (${parts.getOrElse(1) { "?" }})")
+                writeResponse(client, 401, jsonRpcError(null, -32001, "未授权：Bearer 令牌不匹配"), sse = false)
+                return
+            }
+            if (contentLength <= 0 || contentLength > 1 shl 20) {
+                writeResponse(client, 400, jsonRpcError(null, -32600, "请求体为空或过大"), sse = false)
+                return
+            }
+            val bodyBytes = ByteArray(contentLength)
+            var read = 0
+            while (read < contentLength) {
+                val n = input.read(bodyBytes, read, contentLength - read)
+                if (n < 0) break
+                read += n
+            }
+            if (read < contentLength) {
+                writeResponse(client, 400, jsonRpcError(null, -32600, "请求体不完整"), sse = false)
+                return
+            }
+            val response = dispatch(String(bodyBytes, Charsets.UTF_8))
+            // JSON-RPC notifications (no id) get 202 Accepted with no body per the MCP spec.
+            if (response.isEmpty()) {
+                writeResponse(client, 202, "", sse = false)
+            } else {
+                writeResponse(client, 200, response, sse = acceptsSse)
             }
         } catch (e: Exception) {
             Utils.log("McpServer: connection failed: ${e.message}")
         } finally {
             runCatching { client.close() }
+        }
+    }
+
+    /**
+     * Read the HTTP head (request line + headers) as raw bytes, up to and including the \r\n\r\n
+     * terminator. Returns null when the peer closed early or the head exceeds 16KB. Byte-oriented
+     * because the head may be followed by a non-ASCII body on the same stream — a char Reader would
+     * buffer ahead past the head and corrupt the body's byte count.
+     */
+    private fun readHead(input: InputStream): ByteArray? {
+        val out = ByteArrayOutputStream(512)
+        var t0 = -1
+        var t1 = -1
+        var t2 = -1
+        var t3 = -1
+        var count = 0
+        while (true) {
+            val b = input.read()
+            if (b < 0) return null
+            out.write(b)
+            t0 = t1; t1 = t2; t2 = t3; t3 = b
+            if (++count > 16 * 1024) return null
+            if (t0 == '\r'.code && t1 == '\n'.code && t2 == '\r'.code && t3 == '\n'.code) {
+                return out.toByteArray()
+            }
         }
     }
 

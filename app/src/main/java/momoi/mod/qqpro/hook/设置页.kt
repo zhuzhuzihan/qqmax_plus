@@ -382,6 +382,7 @@ class 设置页 : SettingsActivity() {
                 { M3.parseColorOrNull(Settings.textColor.value) ?: M3.onColor(BubbleCorner.resolvedBubbleColor(0)) })
             chatBackgroundPicker()
             slider("背景变暗程度", "调暗背景图以便看清文字，重进聊天页生效", Settings.chatBgDarken, min = 0f, max = 0.9f)
+            switch("防撤回", "对方撤回消息时保留原文继续显示，自己撤回/编辑消息不受影响；重进聊天后仍显示撤回提示", Settings.antiRecall)
         },
         SettingsCategory("群聊头像", "群聊中的头像与昵称") {
             switch("群聊显示头像", "在群聊消息中显示用户头像和两行昵称", Settings.showGroupAvatar)

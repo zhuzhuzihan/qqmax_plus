@@ -127,6 +127,13 @@ object Settings {
     // Show a 全员禁言 (whole-group mute) switch in the M3 group settings, for the owner/admin only.
     // Syncs to the current mute state and toggles it via the kernel. Requires useM3Settings. Default on.
     val groupWholeMute = BooleanPref("groupWholeMute", true)
+    // Anti-recall (防撤回): when someone else recalls a message, keep showing the original text instead
+    // of the "recalled" grey tip. Implemented at the CurrentMsgList merge point: the recall rewrite
+    // (same msgId → grey tip with a revokeElement) is swapped back for the mirrored original. Recalls
+    // initiated by self (including message-edit = recall + resend, and self admin recalls) are always
+    // honored so editing doesn't duplicate. The kernel DB is still updated, so re-entering the chat
+    // shows the recall tip again. Default on.
+    val antiRecall = BooleanPref("antiRecall", true)
     // Online-presence display (friends + group members). Presence needs kernel status polling, so it
     // only starts when at least one of these is on. Default on. See OnlineStatus.kt.
     val onlineStatusMainList = BooleanPref("onlineStatusMainList", true)   // DM avatar dot in conversation list
@@ -542,7 +549,7 @@ object Settings {
         showGroupAvatar, showSelfAvatar, avatarSizeScale, hideRepeatedSender, plusOneButton, replaceGroupNick, showMemberLevel, inlineSendButton,
         inlineChatInput, fullInlineInput, inlineEmojiButton, keepInputBarOnScroll, rememberDraft, emojiPickerToInput, materializeChat,
         screenCornerDiameter, titlebarSideMargin,
-        hideVoiceButton, muteHideInputBar, groupWholeMute,
+        hideVoiceButton, muteHideInputBar, groupWholeMute, antiRecall,
         onlineStatusMainList, onlineStatusContactList, onlineStatusTitlebar, onlineStatusProfile,
         showStatusBar, backToFirstPage, attachmentOverlay, materialAttachmentMenu, materialLongPressMenu, longPressMenuOrder, attachmentMenuOrder, enableTitlebar, titlebarChatOnly, titlebarShowUnread,
         floatUnreadInChat, titlebarHeight, hideTitlebarWhenTyping, chatImportantJump, mainNavCustom, bottomMainNav, mainNavHeight, mainNavSquare, mainNavAllIcons, mainNavUnread, mainNavUnreadJump,

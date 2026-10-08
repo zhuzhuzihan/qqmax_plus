@@ -129,6 +129,18 @@ object QzoneFeedM3 {
         adapter.c as? List<BusinessFeedData>
     }.getOrNull()
 
+    /**
+     * Snapshot of the currently loaded feed for read-only consumers (e.g. the MCP server tools).
+     * Prefers the main feed; falls back to a per-user space feed when only that is open. Empty when
+     * no space page has been opened yet (the native engine owns loading — open the space once first).
+     * The returned list is a copy; the [BusinessFeedData] items are shared with the adapter, read-only.
+     */
+    fun snapshot(): List<BusinessFeedData> {
+        val all = adapters.values.toList()
+        if (all.isEmpty()) return emptyList()
+        return (all.firstOrNull { !it.perUser } ?: all[0]).snapshot()
+    }
+
     // ===================================================================================
 
     class VH(val container: FrameLayout) : RecyclerView.ViewHolder(container)
@@ -140,6 +152,9 @@ object QzoneFeedM3 {
             items = ArrayList(list)
             notifyDataSetChanged()
         }
+
+        /** A copy of the currently held feed items (read-only consumers, e.g. MCP tools). */
+        fun snapshot(): List<BusinessFeedData> = items.toList()
 
         private fun hasHeader() = perUser && items.isNotEmpty()
         private fun dataPos(pos: Int) = if (hasHeader()) pos - 1 else pos

@@ -19,9 +19,12 @@ import com.tencent.watch.aio_impl.coreImpl.vb.WatchAIOListVB
 import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import kotlinx.coroutines.CoroutineScope
 import momoi.anno.mixin.Mixin
+import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.enums.NTMsgType
 import momoi.mod.qqpro.lib.Observable
 import momoi.mod.qqpro.util.ThreadManager
 import momoi.mod.qqpro.util.Utils
+import momoi.mod.qqpro.util.runOnUi
 import java.util.LinkedList
 
 object CurrentMsgList {
@@ -41,6 +44,9 @@ object CurrentMsgList {
     // instead of the generic [msgList] observer is what makes upward paging reliable — a spurious
     // update can no longer be mistaken for the page we requested. See [loadOlderPage].
     val topPageResult = Observable(0)
+
+    // msgIds already toasted for anti-recall, so repeat kernel pushes of the same recall don't spam.
+    private val recallToasted = mutableSetOf<Long>()
 
     fun getMsgIndex(msg: WatchAIOMsgItem): Int {
         return msgList.value.indexOf(msg)
@@ -313,6 +319,35 @@ object CurrentMsgList {
         }, onTimeout = { result(null) })
     }
 
+    /**
+     * Anti-recall (防撤回): a recall rewrites the original message in place into a grey tip (same
+     * msgId, msgType grey-tip, first element carrying a revokeElement). When the [msg] mirror still
+     * holds that msgId's original, return the original so the caller renders it instead (the grey tip
+     * is dropped); otherwise return null and the merge proceeds normally.
+     *
+     * Recalls initiated by self are always honored — isSelfOperate (own recall, message-edit which is
+     * recall + resend) or operatorUid == self (self admin recall) — so editing doesn't leave the
+     * original plus the edited copy.
+     */
+    private fun recallPreserved(last: WatchAIOMsgItem, msg: List<WatchAIOMsgItem>): WatchAIOMsgItem? {
+        if (!Settings.antiRecall.value) return null
+        val rec = last.d
+        if (rec.msgType != NTMsgType.GRAYTIPS) return null
+        val revoke = runCatching { rec.elements?.firstOrNull()?.grayTipElement?.revokeElement }.getOrNull()
+            ?: return null
+        if (revoke.isSelfOperate || revoke.operatorUid == SelfContact.peerUid) return null
+        val orig = msg.firstOrNull { it.d.msgId == rec.msgId } ?: return null
+        if (orig.d.msgType == NTMsgType.GRAYTIPS) return null
+        if (orig.d.senderUid == SelfContact.peerUid) return null
+        if (recallToasted.add(rec.msgId)) {
+            if (recallToasted.size > 500) recallToasted.clear()
+            val who = revoke.operatorNick?.takeIf { it.isNotBlank() } ?: "对方"
+            runOnUi { Utils.toast(Utils.application, "${who}撤回了一条消息，已保留原文") }
+        }
+        Utils.log("AntiRecall: kept msgId=${rec.msgId} operator=${revoke.operatorUid}")
+        return orig
+    }
+
     @Mixin
     class Hook : WatchAIOListVB() {
         @Suppress("UNCHECKED_CAST")
@@ -338,16 +373,19 @@ object CurrentMsgList {
                     list.addAll(msg)
                     break
                 }
-                val index = msg.indexOfLast { last.d.msgId == it.d.msgId }
+                // 防撤回: recallPreserved returns the mirrored original when `last` is someone else's
+                // recall rewrite; rendering it (same msgId) keeps the text and drops the grey tip.
+                val item = recallPreserved(last, msg) ?: last
+                val index = msg.indexOfLast { item.d.msgId == it.d.msgId }
                 if (index == -1) {
                     if (insertIndex == -1) {
-                        msg.add(last)
+                        msg.add(item)
                         insertIndex = msg.lastIndex
                     } else {
-                        msg.add(insertIndex, last)
+                        msg.add(insertIndex, item)
                     }
                 } else {
-                    msg[index] = last
+                    msg[index] = item
                     //if (insertIndex == -1) {
                     //    insertIndex = 0
                     //}
