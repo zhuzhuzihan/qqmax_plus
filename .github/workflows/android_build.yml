@@ -30,8 +30,8 @@ jobs:
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v4.6.2
       with:
-        name: QQPro
-        path: app/dist/QQPro*.apk
+        name: QQMax
+        path: app/dist/QQMax*.apk
 
     - name: Generate release tag and name
       id: release_info
@@ -50,6 +50,6 @@ jobs:
           自动构建于 ${{ github.sha }}
           触发者：${{ github.actor }}
           提交信息：${{ github.event.head_commit.message }}
-        files: app/dist/QQPro*.apk
+        files: app/dist/QQMax*.apk
         draft: false
         prerelease: false
