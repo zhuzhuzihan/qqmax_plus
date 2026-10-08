@@ -20,6 +20,7 @@ import com.tencent.watch.aio_impl.data.WatchAIOMsgItem
 import kotlinx.coroutines.CoroutineScope
 import momoi.anno.mixin.Mixin
 import momoi.mod.qqpro.Settings
+import momoi.mod.qqpro.enums.ElementType
 import momoi.mod.qqpro.enums.NTMsgType
 import momoi.mod.qqpro.lib.Observable
 import momoi.mod.qqpro.util.ThreadManager
@@ -367,6 +368,12 @@ object CurrentMsgList {
             return null
         }
         if (orig.d.senderUid == SelfContact.peerUid) return null
+        // 只保留文字消息:原文须全部由文本/表情元素构成。图片/语音/视频/文件等引用外部
+        // 文件的消息一律放行——文件可能根本没下载或已被清理,留了也显示不出来,还占暂存。
+        val keepable = orig.d.elements?.all {
+            it.elementType == ElementType.TEXT || it.elementType == ElementType.FACE
+        } ?: false
+        if (!keepable) return null
         recalledKept[key] = orig
         if (recallToasted.add(rec.msgId)) {
             if (recallToasted.size > 500) recallToasted.clear()

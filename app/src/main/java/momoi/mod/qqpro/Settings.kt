@@ -127,12 +127,15 @@ object Settings {
     // Show a 全员禁言 (whole-group mute) switch in the M3 group settings, for the owner/admin only.
     // Syncs to the current mute state and toggles it via the kernel. Requires useM3Settings. Default on.
     val groupWholeMute = BooleanPref("groupWholeMute", true)
-    // Anti-recall (防撤回): when someone else recalls a message, keep showing the original text instead
-    // of the "recalled" grey tip. Implemented at the CurrentMsgList merge point: the recall rewrite
-    // (same msgId → grey tip with a revokeElement) is swapped back for the mirrored original, which is
-    // also stashed process-wide so re-entering the chat still restores the text. Recalls initiated by
-    // self (including message-edit = recall + resend, and self admin recalls) are always honored so
-    // editing doesn't duplicate. The stash is in-memory only (cleared on app restart). Default on.
+    // Anti-recall (防撤回): when someone else recalls a TEXT message, keep showing the original
+    // instead of the "recalled" grey tip (plus a "tried to recall" local tip). Only text/face
+    // elements are preserved — media/file messages reference external files that may never have
+    // been downloaded, so they are left to recall normally. Implemented at the CurrentMsgList merge
+    // point: the recall rewrite (same msgId → grey tip with a revokeElement) is swapped back for
+    // the mirrored original, which is also stashed process-wide so re-entering the chat still
+    // restores the text. Recalls initiated by self (including message-edit = recall + resend, and
+    // self admin recalls) are always honored so editing doesn't duplicate. The stash is in-memory
+    // only (cleared on app restart). Default on.
     val antiRecall = BooleanPref("antiRecall", true)
     // Online-presence display (friends + group members). Presence needs kernel status polling, so it
     // only starts when at least one of these is on. Default on. See OnlineStatus.kt.
