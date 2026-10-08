@@ -366,13 +366,14 @@ object CurrentMsgList {
             // empty RecyclerView (incoming list size 0 → blank chat) is distinguishable from a
             // render-side problem (non-zero list but cells invisible). peer ties it to the chat.
             Utils.log("MsgList.n: peer=${CurrentContact.peerUid} updateType=$updateType incomingSize=${list.size} mirrorSize=${msg.size} types=[${list.take(8).joinToString(",") { runCatching { "${it.d.msgType}/${it.javaClass.simpleName}" }.getOrElse { "?" } }}]")
-            // 防撤回(预处理):对方撤回把原消息原地改写成灰条(同 msgId),先把这类灰条从本次 state 里
-            // 剔除,镜像里的原文自然保留并参与后续合并。必须在这里做:下面的循环遇到首个已存在的
-            // 消息就 break,剩下未处理的 incoming 会被原样带进渲染——若灰条恰好落在未处理区(例如
-            // 自己发消息触发的 state 推送,新消息先命中 break),灰条会连原文一起写回镜像,防撤回失效。
-            val incoming = list.iterator()
+            // 防撤回(预处理):对方撤回把原消息原地改写成灰条(同 msgId),把这类灰条在本次 state 里
+            // 原位替换成镜像里的原文(顺序不变)。必须在这里做:下面的循环遇到首个已存在的消息就
+            // break,剩下未处理的 incoming 会被原样带进渲染——替换后原文卡在自然位置上,无论 break
+            // 停在哪它都会被带进渲染;若只是剔除灰条,break 若停在原文之新处,原文既不在剩余
+            // incoming 里也不在 mirror 尾巴里,就会被直接丢掉(自己发消息后原文消失)。
+            val incoming = list.listIterator()
             while (incoming.hasNext()) {
-                if (recallPreserved(incoming.next(), msg) != null) incoming.remove()
+                recallPreserved(incoming.next(), msg)?.let { incoming.set(it) }
             }
             var insertIndex = -1
             while (true) {
